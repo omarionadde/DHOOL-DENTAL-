@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { Patient, PatientHistory, Prescription, StaffUser, LabResult } from '../types';
-import { Trash2, Printer, Plus, FileText, Pill, X, Save, Clock, ClipboardList, User, Microscope, Sparkles, AlertCircle } from 'lucide-react';
+import { Trash2, Printer, Plus, FileText, Pill, X, Save, Clock, ClipboardList, User, Microscope, Sparkles, AlertCircle, ChevronRight } from 'lucide-react';
 import { getAIAssistance } from '../services/geminiService';
 
 interface Props {
@@ -14,7 +14,7 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
   const { 
     patients, addNewPatient, deletePat, 
     patientHistory, addNewHistory, prescriptions, addNewPrescription, removePrescription,
-    labResults, addNewLabResult
+    labResults, addNewLabResult, inventory
   } = useData();
   
   const [showAddModal, setShowAddModal] = useState(false);
@@ -29,6 +29,7 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
   const [phone, setPhone] = useState('');
   const [condition, setCondition] = useState('');
 
+  // History Form
   const [diagnosis, setDiagnosis] = useState('');
   const [treatment, setTreatment] = useState('');
   const [notes, setNotes] = useState('');
@@ -37,6 +38,10 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
   const [testName, setTestName] = useState('');
   const [testResult, setTestResult] = useState('');
   const [testStatus, setTestStatus] = useState<'Normal'|'Abnormal'|'Critical'>('Normal');
+
+  // Prescription Form State
+  const [rxQueue, setRxQueue] = useState<{name: string; dosage: string; frequency: string; duration: string}[]>([]);
+  const [rxForm, setRxForm] = useState({ name: '', dosage: '', frequency: '', duration: '' });
 
   const [detailTab, setDetailTab] = useState<'info' | 'history' | 'prescription' | 'labs'>('info');
 
@@ -84,6 +89,48 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
     await addNewPatient(newPatient);
     setShowAddModal(false);
     setName(''); setAge(''); setPhone(''); setCondition('');
+  };
+
+  const handleAddHistory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPatient) return;
+    const newHistory: PatientHistory = {
+      id: Date.now().toString(),
+      patientId: selectedPatient.id,
+      date: new Date().toISOString().split('T')[0],
+      diagnosis,
+      treatment,
+      notes,
+      doctorName: user.name
+    };
+    await addNewHistory(newHistory);
+    setDiagnosis(''); setTreatment(''); setNotes('');
+  };
+
+  // Prescription Handlers
+  const handleAddToRxQueue = () => {
+    if(!rxForm.name || !rxForm.dosage) return;
+    setRxQueue([...rxQueue, rxForm]);
+    setRxForm({ name: '', dosage: '', frequency: '', duration: '' });
+  };
+
+  const handleRemoveFromRxQueue = (index: number) => {
+    const newQueue = [...rxQueue];
+    newQueue.splice(index, 1);
+    setRxQueue(newQueue);
+  };
+
+  const handleSaveRx = async () => {
+    if(rxQueue.length === 0 || !selectedPatient) return;
+    const newRx: Prescription = {
+        id: Date.now().toString(),
+        patientId: selectedPatient.id,
+        doctorName: user.name,
+        date: new Date().toISOString().split('T')[0],
+        medicines: rxQueue
+    };
+    await addNewPrescription(newRx);
+    setRxQueue([]);
   };
 
   const filteredPatients = useMemo(() => {
@@ -171,7 +218,7 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
               <div className="flex border-b border-slate-100 bg-white p-2 gap-2 overflow-x-auto no-scrollbar shrink-0">
                  <TabButton active={detailTab === 'info'} onClick={() => setDetailTab('info')} icon={<FileText className="w-4 h-4" />} label="Overview" />
                  <TabButton active={detailTab === 'history'} onClick={() => setDetailTab('history')} icon={<ClipboardList className="w-4 h-4" />} label="Clinical History" />
-                 <TabButton active={detailTab === 'prescription'} onClick={() => setDetailTab('prescription')} icon={<Pill className="w-4 h-4" />} label="Pharmacy" />
+                 <TabButton active={detailTab === 'prescription'} onClick={() => setDetailTab('prescription')} icon={<Pill className="w-4 h-4" />} label="Prescription" />
                  <TabButton active={detailTab === 'labs'} onClick={() => setDetailTab('labs')} icon={<Microscope className="w-4 h-4" />} label="Laboratory" />
               </div>
 
@@ -196,10 +243,197 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
                         </div>
                       </div>
                       <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col items-center justify-center opacity-40">
-                         {/* Fixed the name to 'Microscope' from 'মাইক্রোস্কোপ' */}
                          <Microscope className="w-20 h-20 mb-4 text-slate-300" />
                          <p className="font-bold text-slate-400 uppercase tracking-widest text-[10px]">No Imaging Uploaded</p>
                       </div>
+                    </div>
+                 )}
+
+                 {detailTab === 'history' && (
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+                       <div className="lg:col-span-1">
+                          <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 sticky top-0">
+                             <h3 className="text-xl font-black text-slate-900 mb-6 tracking-tight">Add Clinical Note</h3>
+                             <form onSubmit={handleAddHistory} className="space-y-4">
+                                <div className="space-y-1">
+                                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Diagnosis</label>
+                                   <input required value={diagnosis} onChange={e => setDiagnosis(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-sm" placeholder="e.g. Dental Caries" />
+                                </div>
+                                <div className="space-y-1">
+                                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Treatment Plan</label>
+                                   <input required value={treatment} onChange={e => setTreatment(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-sm" placeholder="e.g. Root Canal Therapy" />
+                                </div>
+                                <div className="space-y-1">
+                                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Clinical Notes</label>
+                                   <textarea value={notes} onChange={e => setNotes(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-sm h-24" placeholder="Observations..." />
+                                </div>
+                                <button type="submit" className="w-full py-4 bg-blue-600 text-white font-black rounded-2xl uppercase tracking-widest text-[10px] shadow-lg hover:bg-blue-700 transition-all">Save Record</button>
+                             </form>
+                          </div>
+                       </div>
+                       <div className="lg:col-span-2 space-y-6">
+                          <h3 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-3"><ClipboardList className="w-5 h-5 text-slate-400" /> History Log</h3>
+                          {patientHistory.filter(h => h.patientId === selectedPatient.id).map(record => (
+                             <div key={record.id} className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
+                                <div className="flex justify-between items-start mb-4">
+                                   <div>
+                                     <h4 className="text-lg font-black text-slate-900">{record.diagnosis}</h4>
+                                     <p className="text-blue-600 font-bold text-sm mt-1">{record.treatment}</p>
+                                   </div>
+                                   <span className="px-4 py-1.5 bg-slate-50 text-slate-500 rounded-xl text-[10px] font-black uppercase tracking-widest">{record.date}</span>
+                                </div>
+                                <p className="text-slate-500 text-sm leading-relaxed mb-4">{record.notes}</p>
+                                <div className="pt-4 border-t border-slate-50 flex items-center gap-2">
+                                   <User className="w-4 h-4 text-slate-300" />
+                                   <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Dr. {record.doctorName}</span>
+                                </div>
+                             </div>
+                          ))}
+                       </div>
+                    </div>
+                 )}
+
+                 {detailTab === 'prescription' && (
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+                        {/* PRESCRIPTION BUILDER */}
+                        <div className="lg:col-span-1">
+                           <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 sticky top-0">
+                              <h3 className="text-xl font-black text-slate-900 mb-6 tracking-tight">Prescription Builder</h3>
+                              
+                              <div className="space-y-4 mb-6">
+                                 <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Medicine Name</label>
+                                    <input 
+                                       list="meds-list"
+                                       value={rxForm.name} 
+                                       onChange={e => setRxForm({...rxForm, name: e.target.value})} 
+                                       className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-sm focus:ring-2 focus:ring-blue-100 transition-all" 
+                                       placeholder="Search or type..." 
+                                    />
+                                    <datalist id="meds-list">
+                                       {inventory.map(m => <option key={m.id} value={m.name} />)}
+                                    </datalist>
+                                 </div>
+                                 <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Dosage</label>
+                                    <input 
+                                       value={rxForm.dosage} 
+                                       onChange={e => setRxForm({...rxForm, dosage: e.target.value})} 
+                                       className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-sm focus:ring-2 focus:ring-blue-100 transition-all" 
+                                       placeholder="e.g. 500mg" 
+                                    />
+                                 </div>
+                                 <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1">
+                                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Frequency</label>
+                                       <input 
+                                          value={rxForm.frequency} 
+                                          onChange={e => setRxForm({...rxForm, frequency: e.target.value})} 
+                                          className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-sm focus:ring-2 focus:ring-blue-100 transition-all" 
+                                          placeholder="e.g. 1-0-1" 
+                                       />
+                                    </div>
+                                    <div className="space-y-1">
+                                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Duration</label>
+                                       <input 
+                                          value={rxForm.duration} 
+                                          onChange={e => setRxForm({...rxForm, duration: e.target.value})} 
+                                          className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-sm focus:ring-2 focus:ring-blue-100 transition-all" 
+                                          placeholder="e.g. 5 Days" 
+                                       />
+                                    </div>
+                                 </div>
+                                 <button 
+                                    onClick={handleAddToRxQueue}
+                                    type="button" 
+                                    className="w-full py-3 bg-slate-100 text-slate-600 font-black rounded-2xl uppercase tracking-widest text-[10px] hover:bg-slate-200 transition-all"
+                                 >
+                                    Add Medicine to List
+                                 </button>
+                              </div>
+
+                              {/* Queue List */}
+                              {rxQueue.length > 0 && (
+                                 <div className="mb-6 bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Medicines to Prescribe</h4>
+                                    <div className="space-y-2">
+                                       {rxQueue.map((item, idx) => (
+                                          <div key={idx} className="flex justify-between items-center bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
+                                             <div>
+                                                <p className="text-xs font-black text-slate-800">{item.name}</p>
+                                                <p className="text-[10px] text-slate-500">{item.dosage} • {item.frequency}</p>
+                                             </div>
+                                             <button onClick={() => handleRemoveFromRxQueue(idx)} className="p-1.5 text-rose-400 hover:bg-rose-50 rounded-lg"><X className="w-3 h-3" /></button>
+                                          </div>
+                                       ))}
+                                    </div>
+                                 </div>
+                              )}
+
+                              <button 
+                                 onClick={handleSaveRx}
+                                 disabled={rxQueue.length === 0}
+                                 className="w-full py-4 bg-emerald-600 text-white font-black rounded-2xl uppercase tracking-widest text-[10px] shadow-lg hover:bg-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                 Issue Final Prescription
+                              </button>
+                           </div>
+                        </div>
+
+                        {/* HISTORY */}
+                        <div className="lg:col-span-2 space-y-6">
+                           <h3 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-3"><Pill className="w-5 h-5 text-slate-400" /> Prescription History</h3>
+                           
+                           {prescriptions.filter(p => p.patientId === selectedPatient.id).length === 0 ? (
+                              <div className="py-20 text-center bg-white rounded-[2.5rem] border border-dashed border-slate-200">
+                                 <p className="text-slate-400 font-bold text-sm">No prescriptions issued yet.</p>
+                              </div>
+                           ) : (
+                              prescriptions.filter(p => p.patientId === selectedPatient.id).map(rx => (
+                                 <div key={rx.id} className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 group">
+                                    <div className="flex justify-between items-center mb-6 border-b border-slate-50 pb-4">
+                                       <div className="flex items-center gap-3">
+                                          <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
+                                             <FileText className="w-5 h-5" />
+                                          </div>
+                                          <div>
+                                             <h4 className="font-black text-slate-900 text-sm">Rx Issued: {rx.date}</h4>
+                                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Dr. {rx.doctorName}</p>
+                                          </div>
+                                       </div>
+                                       <div className="flex gap-2">
+                                          <button className="p-2 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all" title="Print">
+                                             <Printer className="w-4 h-4" />
+                                          </button>
+                                          <button onClick={() => { if(confirm('Delete record?')) removePrescription(rx.id) }} className="p-2 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all">
+                                             <Trash2 className="w-4 h-4" />
+                                          </button>
+                                       </div>
+                                    </div>
+
+                                    <div className="space-y-3">
+                                       {rx.medicines.map((med, idx) => (
+                                          <div key={idx} className="flex items-center justify-between p-4 bg-slate-50/50 rounded-2xl hover:bg-slate-50 transition-colors">
+                                             <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 bg-white border border-slate-100 rounded-lg flex items-center justify-center text-slate-400 font-black text-xs">
+                                                   {idx + 1}
+                                                </div>
+                                                <div>
+                                                   <p className="font-black text-slate-900 text-sm">{med.name}</p>
+                                                   <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{med.dosage}</p>
+                                                </div>
+                                             </div>
+                                             <div className="text-right">
+                                                <p className="font-black text-slate-900 text-xs">{med.frequency}</p>
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{med.duration}</p>
+                                             </div>
+                                          </div>
+                                       ))}
+                                    </div>
+                                 </div>
+                              ))
+                           )}
+                        </div>
                     </div>
                  )}
 
@@ -256,10 +490,25 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
                        </div>
                     </div>
                  )}
-                 {/* Existing tabs follow logic... */}
               </div>
            </div>
          </div>
+      )}
+
+      {showAddModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+           <div className="bg-white rounded-[3rem] p-8 w-full max-w-md relative shadow-2xl">
+              <button onClick={() => setShowAddModal(false)} className="absolute top-6 right-6 p-2"><X className="w-5 h-5" /></button>
+              <h3 className="text-2xl font-black text-slate-900 mb-8">Patient Registration</h3>
+              <form onSubmit={handleAddPatient} className="space-y-4">
+                 <input required placeholder="Full Name" value={name} onChange={e => setName(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold" />
+                 <input required type="number" placeholder="Age" value={age} onChange={e => setAge(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold" />
+                 <input required placeholder="Phone Number" value={phone} onChange={e => setPhone(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold" />
+                 <input placeholder="Chief Complaint (Optional)" value={condition} onChange={e => setCondition(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold" />
+                 <button type="submit" className="w-full py-5 bg-blue-600 text-white font-black rounded-2xl uppercase tracking-widest text-[10px] shadow-xl hover:bg-blue-700 transition-all">Create Profile</button>
+              </form>
+           </div>
+        </div>
       )}
     </div>
   );
