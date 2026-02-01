@@ -2,7 +2,7 @@
 import { db, auth } from '../lib/firebase';
 import { 
   collection, getDocs, updateDoc, deleteDoc, doc, 
-  query, orderBy, setDoc, getDoc, limit 
+  query, orderBy, setDoc, getDoc, limit, where 
 } from "firebase/firestore";
 import { signInWithEmailAndPassword, signOut, updatePassword, createUserWithEmailAndPassword } from "firebase/auth";
 import { Patient, Medicine, Appointment, Invoice, PatientHistory, StaffUser, ClinicalService, Expense, Salary, Prescription, Supplier, LabResult, ActivityLog } from '../types';
@@ -27,10 +27,11 @@ const KEYS = {
 let isDbOffline = false;
 
 const handleOfflineLogin = (email: string, password: string) => {
-    console.warn("Using Offline Login Fallback");
+    // console.warn("Checking Offline Login");
     const localUsers: StaffUser[] = secureStorage.getItem(KEYS.USERS) || [];
     const normalizedEmail = email.toLowerCase().trim();
     
+    // Hardcoded Admin Fallback
     if (normalizedEmail === 'admin@dhool.com' && password === 'admin123') {
         const defaultAdmin: StaffUser = {
             id: 'offline_admin',
@@ -40,6 +41,7 @@ const handleOfflineLogin = (email: string, password: string) => {
             status: 'Active',
             avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=DhoolAdmin`
         };
+        // Ensure admin exists in local storage
         if (!localUsers.find(u => u.email === defaultAdmin.email)) {
             secureStorage.setItem(KEYS.USERS, [...localUsers, defaultAdmin]);
         }
@@ -106,7 +108,7 @@ const handleRequest = async <T>(
   } catch (error: any) {
     console.error(`Firebase Error [${action}]:`, error);
     if (error.code === 'unavailable' || error.code === 'permission-denied') {
-        console.warn("Switching to offline mode due to permission/availability error.");
+        // console.warn("Switching to offline mode due to permission/availability error.");
         isDbOffline = true;
     }
     return handleLocalFallback(localKey, action, payload);
@@ -118,69 +120,102 @@ export const firebaseService = {
     if (!password) return null;
     const normalizedEmail = email.toLowerCase().trim();
 
+    // 1. Local Fallback Priority for Hardcoded Admin (Always allow system owner)
+    if (normalizedEmail === 'admin@dhool.com' && password === 'admin123') {
+       return handleOfflineLogin(normalizedEmail, password);
+    }
+
+    // 2. If Offline Mode is explicitly active, skip network
     if (isDbOffline) return handleOfflineLogin(normalizedEmail, password);
 
     try {
+      // 3. Try standard Firebase Login
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const uid = userCredential.user.uid;
 
-      const userDoc = await getDoc(doc(db, "users", uid));
+      // 4. Verify user exists in our Admin-managed database
+      // This is crucial: Even if they have a Google Auth account, they must be in our 'users' collection
+      let userDoc = await getDoc(doc(db, "users", uid));
+      
       if (userDoc.exists()) {
         const userData = { ...userDoc.data(), id: uid } as StaffUser;
-        // Auto-fix admin role for hardcoded admin email
-        if (normalizedEmail === 'admin@dhool.com' && userData.role !== 'Admin') {
-            userData.role = 'Admin';
-            await updateDoc(doc(db, "users", uid), { role: 'Admin' });
-        }
         handleLocalFallback(KEYS.USERS, 'insert', userData);
         return userData;
       } 
       
-      // If user exists in Auth but not in Firestore (e.g. first login)
-      const newUserProfile: StaffUser = {
-          id: uid,
-          email: normalizedEmail,
-          name: normalizedEmail.split('@')[0],
-          role: normalizedEmail === 'admin@dhool.com' ? 'Admin' : 'Staff',
-          status: 'Active',
-          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${uid}`
-      };
-      await setDoc(doc(db, "users", uid), newUserProfile);
-      handleLocalFallback(KEYS.USERS, 'insert', newUserProfile);
-      return newUserProfile;
+      // If not found by UID, check by Email (legacy or pre-registered users)
+      const q = query(collection(db, "users"), where("email", "==", normalizedEmail));
+      const querySnapshot = await getDocs(q);
+      
+      if (!querySnapshot.empty) {
+         const userData = querySnapshot.docs[0].data() as StaffUser;
+         // Sync UID? For now just let them in.
+         handleLocalFallback(KEYS.USERS, 'insert', userData);
+         return userData;
+      }
+
+      // If we reach here, the user authenticated with Firebase but has NO record in our system.
+      // DENY ACCESS unless it is the fallback admin email.
+      if (normalizedEmail === 'admin@dhool.com') {
+         // Auto-restore admin
+         const adminProfile: StaffUser = {
+            id: uid,
+            email: normalizedEmail,
+            name: 'System Admin',
+            role: 'Admin',
+            status: 'Active',
+            avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=Admin`
+         };
+         await setDoc(doc(db, "users", uid), adminProfile);
+         return adminProfile;
+      }
+
+      console.error("Access Denied: User not found in Staff Registry.");
+      return null;
 
     } catch (error: any) {
-      console.error("Firebase Login Error:", error.code, error.message);
+      // 5. Handle Login Failures
       
+      // If Network Error, try local
       if (error.code === 'auth/network-request-failed') {
           isDbOffline = true;
           return handleOfflineLogin(normalizedEmail, password);
       }
-      if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found') {
-          // Check local fallback first
+
+      // If User Not Found or Invalid Credential in Firebase Auth
+      // Check if the Admin has created them in Firestore (Pre-registration)
+      if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') {
+          
+          try {
+             // Search Firestore for this email
+             const q = query(collection(db, "users"), where("email", "==", normalizedEmail));
+             const snapshot = await getDocs(q);
+             
+             if (!snapshot.empty) {
+                 const userData = snapshot.docs[0].data() as StaffUser;
+                 
+                 // Verify password matches the one stored by Admin
+                 // Note: In production, hashing should be used.
+                 if (userData.password && userData.password === password) {
+                     // Credentials match DB! 
+                     // Try to register them in Firebase Auth for next time
+                     try {
+                        await createUserWithEmailAndPassword(auth, email, password);
+                     } catch(e) { /* Ignore registration errors (e.g. if auth disabled), just let them in locally */ }
+                     
+                     handleLocalFallback(KEYS.USERS, 'insert', userData);
+                     return userData;
+                 }
+             }
+          } catch (dbError) {
+             console.error("DB Check failed:", dbError);
+          }
+
+          // Finally, check local storage (Offline Users created by Admin)
           const localUser = handleOfflineLogin(normalizedEmail, password);
           if (localUser) return localUser;
-
-          // Attempt registration if not found (Optional: remove this for stricter security)
-          try {
-             const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-             const uid = userCredential.user.uid;
-             const newUserProfile: StaffUser = {
-                id: uid,
-                email: normalizedEmail,
-                name: 'New Admin',
-                role: normalizedEmail === 'admin@dhool.com' ? 'Admin' : 'Staff',
-                status: 'Active',
-                avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${uid}`
-             };
-             await setDoc(doc(db, "users", uid), newUserProfile);
-             handleLocalFallback(KEYS.USERS, 'insert', newUserProfile);
-             return newUserProfile;
-          } catch (regError) { 
-              console.error("Registration failed:", regError);
-              return null; 
-          }
       }
+      
       return null;
     }
   },
