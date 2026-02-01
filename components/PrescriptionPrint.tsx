@@ -28,7 +28,7 @@ export const PrescriptionPrint: React.FC<PrescriptionPrintProps> = ({
       margin: 10,
       filename: `Dhool_Rx_${patient.name.replace(/\s+/g, '_')}_${prescription.date}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2 },
+      html2canvas: { scale: 2, useCORS: true },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
 
@@ -69,8 +69,8 @@ export const PrescriptionPrint: React.FC<PrescriptionPrintProps> = ({
                 <h1 className="text-3xl font-black text-slate-900 tracking-tighter leading-none">DHOOL</h1>
                 <p className="text-[10px] font-black tracking-[0.3em] text-emerald-600 uppercase mt-1">Dental Clinic & Pharmacy</p>
                 <div className="text-[9px] text-slate-400 font-bold mt-2 uppercase space-y-0.5">
-                  <p>Maka Al-Mukarama Road, Mogadishu</p>
-                  <p>Tel: +252 61 5000000</p>
+                  <p>Waaberi District, Via Liberia</p>
+                  <p>Tel: +252 61 972 6662</p>
                 </div>
               </div>
             </div>
@@ -145,7 +145,7 @@ export const PrescriptionPrint: React.FC<PrescriptionPrintProps> = ({
             </div>
             <div className="text-center w-48">
               <div className="border-b border-slate-900 pb-2 mb-2 italic font-serif">
-                Dr. {prescription.doctorName}
+                Dr. Mohamed Abdi
               </div>
               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Doctor's Signature & Stamp</p>
             </div>

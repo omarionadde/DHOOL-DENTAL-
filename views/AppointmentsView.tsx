@@ -14,7 +14,7 @@ const AppointmentsView: React.FC = () => {
     date: new Date().toISOString().split('T')[0],
     time: '09:00 AM',
     reason: '',
-    doctor: 'Dr. Ahmed Osman'
+    doctor: 'Dr. Mohamed Abdi'
   });
 
   const handleAdd = async (e: React.FormEvent) => {

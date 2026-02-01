@@ -32,7 +32,7 @@ export const PatientReportPrint: React.FC<PatientReportPrintProps> = ({
       margin: 10,
       filename: `Dhool_Medical_Report_${patient.name.replace(/\s+/g, '_')}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2 },
+      html2canvas: { scale: 2, useCORS: true },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
 
@@ -77,8 +77,9 @@ export const PatientReportPrint: React.FC<PatientReportPrintProps> = ({
                 <h1 className="text-4xl font-black text-slate-900 tracking-tighter leading-none">DHOOL</h1>
                 <p className="text-[12px] font-black tracking-[0.4em] text-emerald-600 uppercase mt-1">Dental Clinic & Pharmacy</p>
                 <div className="text-[10px] text-slate-400 font-bold mt-4 uppercase space-y-1">
-                  <p>Maka Al-Mukarama Road, Mogadishu, Somalia</p>
-                  <p>Tel: +252 61 5000000 | +252 61 2000000</p>
+                  <p>Waaberi District, Via Liberia</p>
+                  <p>Mogadishu, Somalia</p>
+                  <p>Tel: +252 61 972 6662</p>
                   <p>Email: health@dhoolclinic.so</p>
                 </div>
               </div>

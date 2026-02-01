@@ -41,7 +41,7 @@ export const InvoiceReceipt: React.FC<InvoiceProps> = ({
       margin: 0,
       filename: `Dhool_Receipt_${transactionId.slice(-6)}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2 },
+      html2canvas: { scale: 2, useCORS: true },
       jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
     };
 
@@ -64,8 +64,8 @@ export const InvoiceReceipt: React.FC<InvoiceProps> = ({
             <div className="text-center">
               <h2 className="text-xl font-black text-blue-600 tracking-tighter uppercase leading-none">DHOOL</h2>
               <p className="text-[8px] font-black tracking-[0.2em] text-emerald-600 uppercase mt-1">Dental Clinic & Pharmacy</p>
-              <p className="text-[7px] text-gray-400 mt-1 uppercase">Maka Al-Mukarama Rd, Mogadishu</p>
-              <p className="text-[7px] text-gray-400 uppercase">Tel: +252 61 5000000</p>
+              <p className="text-[7px] text-gray-400 mt-1 uppercase">Waaberi District, Via Liberia</p>
+              <p className="text-[7px] text-gray-400 uppercase">Tel: +252 61 972 6662</p>
             </div>
           </div>
 

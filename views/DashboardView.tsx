@@ -12,8 +12,11 @@ const DashboardView: React.FC = () => {
   const { patients, appointments, inventory, invoices, expenses, salaries, isOnline } = useData();
 
   // Financial Integration Logic
+  // We sum ALL invoices (Status 'Paid' + 'Refunded'). 
+  // Because refunds create a separate NEGATIVE invoice, the sum naturally balances out.
+  // Example: Sale +100 (Refunded) + Reversal -100 (Paid) = 0 Net.
   const totalRevenue = invoices
-    .filter(inv => inv.status === 'Paid')
+    .filter(inv => inv.status === 'Paid' || inv.status === 'Refunded')
     .reduce((acc, inv) => acc + inv.amount, 0);
 
   const totalExpenses = expenses.reduce((acc, exp) => acc + exp.amount, 0);
@@ -60,11 +63,11 @@ const DashboardView: React.FC = () => {
           positive={true}
         />
         <StatCard 
-          title="Monthly Revenue" 
+          title="Net Revenue" 
           value={`$${totalRevenue.toLocaleString()}`} 
           icon={<TrendingUp className="w-6 h-6 text-emerald-600" />} 
           trend="Inflow" 
-          positive={true}
+          positive={totalRevenue >= 0}
         />
         <StatCard 
           title="Clinic Outflow" 

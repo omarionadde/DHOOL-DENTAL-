@@ -6,26 +6,27 @@ import { useData } from '../context/DataContext';
 const TreasuryView: React.FC = () => {
   const { invoices, expenses, salaries } = useData();
 
-  // Actual Inflow: Only positive amounts from 'Paid' or 'Partial' invoices
-  // We exclude 'Refunded' original invoices and the negative 'isRefund' entries from inflow.
+  // Actual Inflow: 
+  // We MUST include both 'Paid' and 'Refunded' statuses for POSITIVE amounts.
+  // Why? Because if I sell for $100 (Status: Paid), then Refund (Status becomes Refunded), 
+  // the $100 *did* physically enter the drawer originally.
+  // The refund is handled by the SEPARATE negative invoice created in BillingView.
   const cashInflow = invoices
-    .filter(i => i.method === 'Cash' && i.status === 'Paid' && !i.isRefund)
+    .filter(i => i.method === 'Cash' && (i.status === 'Paid' || i.status === 'Refunded') && i.amount > 0)
     .reduce((acc, i) => acc + i.amount, 0);
     
   const mobileInflow = invoices
-    .filter(i => i.method === 'EVC-Plus' && i.status === 'Paid' && !i.isRefund)
+    .filter(i => i.method === 'EVC-Plus' && (i.status === 'Paid' || i.status === 'Refunded') && i.amount > 0)
     .reduce((acc, i) => acc + i.amount, 0);
   
-  // Outflow: 
-  // 1. Refunds (isRefund: true entries, which have negative amounts)
-  // 2. Expenses
-  // 3. Salaries
+  // Outflow via Refunds:
+  // These are invoices with NEGATIVE amounts.
   const cashRefunds = invoices
-    .filter(i => i.method === 'Cash' && i.isRefund)
+    .filter(i => i.method === 'Cash' && i.amount < 0)
     .reduce((acc, i) => acc + Math.abs(i.amount), 0);
     
   const mobileRefunds = invoices
-    .filter(i => i.method === 'EVC-Plus' && i.isRefund)
+    .filter(i => i.method === 'EVC-Plus' && i.amount < 0)
     .reduce((acc, i) => acc + Math.abs(i.amount), 0);
 
   const totalExpenses = expenses.reduce((acc, i) => acc + i.amount, 0);

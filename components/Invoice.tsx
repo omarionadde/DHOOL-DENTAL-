@@ -41,7 +41,7 @@ export const Invoice: React.FC<InvoiceProps> = ({
       margin: 10,
       filename: `Dhool_Clinical_Invoice_${transactionId.slice(-6)}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2 },
+      html2canvas: { scale: 2, useCORS: true },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
 
@@ -78,9 +78,9 @@ export const Invoice: React.FC<InvoiceProps> = ({
                 </div>
               </div>
               <div className="text-xs text-slate-500 font-medium space-y-1">
-                 <p>Maka Al-Mukarama Road, Wardhigley District</p>
+                 <p>Waaberi District, Via Liberia</p>
                  <p>Mogadishu, Somalia</p>
-                 <p>Tel: +252 61 5000000 | +252 61 2000000</p>
+                 <p>Tel: +252 61 972 6662</p>
                  <p>Email: health@dhoolclinic.so</p>
               </div>
             </div>
@@ -162,7 +162,7 @@ export const Invoice: React.FC<InvoiceProps> = ({
           <div className="grid grid-cols-2 gap-20 border-t border-slate-100 pt-10 mt-10">
              <div className="text-center">
                 <div className="h-10 border-b border-slate-200 mb-2"></div>
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Medical Officer Signature</p>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Dr. Mohamed Abdi</p>
              </div>
              <div className="text-center">
                 <div className="h-10 border-b border-slate-200 mb-2"></div>

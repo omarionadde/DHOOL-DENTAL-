@@ -29,14 +29,15 @@ const BillingView: React.FC<Props> = ({ user }) => {
 
     setIsProcessingRefund(originalInv.id);
     
+    // Create a Negative Invoice to act as the withdrawal
     const refundInv: Invoice = {
       id: `REF-${originalInv.id}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`,
       patientName: originalInv.patientName,
       date: new Date().toISOString().split('T')[0],
-      amount: -Math.abs(originalInv.amount),
+      amount: -Math.abs(originalInv.amount), // Ensure negative
       discount: 0,
       totalPaid: -Math.abs(originalInv.amount),
-      status: 'Refunded',
+      status: 'Paid', // Mark as 'Paid' so it acts as a valid transaction in the ledger
       type: originalInv.type,
       method: originalInv.method,
       isRefund: true
@@ -46,7 +47,7 @@ const BillingView: React.FC<Props> = ({ user }) => {
       // 1. Create the reversal transaction
       const success = await addTransaction(refundInv, []);
       
-      // 2. Mark the original invoice as Refunded to prevent duplicate actions
+      // 2. Mark the original invoice as Refunded (Visual indicator mainly, calculation handles the math)
       if (success) {
         await updateInvoiceStatus(originalInv.id, 'Refunded');
         alert("Waa laga laabtay biilkii si guul leh!");
@@ -106,14 +107,14 @@ const BillingView: React.FC<Props> = ({ user }) => {
           <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform"><TrendingUp className="w-20 h-20" /></div>
           <p className="text-emerald-100 text-[10px] font-black uppercase tracking-widest">Gross Revenue</p>
           <h3 className="text-4xl font-black mt-1 tracking-tighter">
-             ${invoices.filter(i => i.status === 'Paid').reduce((acc, i) => acc + i.amount, 0).toLocaleString()}
+             ${invoices.filter(i => (i.status === 'Paid' || i.status === 'Refunded')).reduce((acc, i) => acc + i.amount, 0).toLocaleString()}
           </h3>
         </div>
         <div className="bg-rose-500 p-8 rounded-[2.5rem] text-white shadow-xl shadow-rose-200 relative overflow-hidden group">
           <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform"><Clock className="w-20 h-20" /></div>
           <p className="text-rose-100 text-[10px] font-black uppercase tracking-widest">Total Refunds</p>
           <h3 className="text-4xl font-black mt-1 tracking-tighter">
-             ${Math.abs(invoices.filter(i => i.status === 'Refunded' || i.isRefund).reduce((acc, i) => acc + (i.amount < 0 ? i.amount : 0), 0)).toLocaleString()}
+             ${Math.abs(invoices.filter(i => i.amount < 0).reduce((acc, i) => acc + i.amount, 0)).toLocaleString()}
           </h3>
         </div>
         <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm relative overflow-hidden group">
@@ -155,7 +156,7 @@ const BillingView: React.FC<Props> = ({ user }) => {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredInvoices.map((inv) => (
-                <tr key={inv.id} className={`hover:bg-slate-50/50 transition-all ${inv.isRefund ? 'bg-rose-50/30' : ''}`}>
+                <tr key={inv.id} className={`hover:bg-slate-50/50 transition-all ${inv.amount < 0 ? 'bg-rose-50/30' : ''}`}>
                   <td className="px-8 py-5 font-mono text-[10px] font-black text-slate-400">#{inv.id.slice(-8)}</td>
                   <td className="px-8 py-5 font-black text-slate-900 text-sm leading-tight">{inv.patientName}</td>
                   <td className="px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">{inv.date}</td>
@@ -182,7 +183,7 @@ const BillingView: React.FC<Props> = ({ user }) => {
                         <button onClick={() => setSelectedInvoice(inv)} className="p-3 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-2xl transition-all" title="View & Print">
                           <Printer className="w-5 h-5" />
                         </button>
-                        {user.role === 'Admin' && !inv.isRefund && inv.status !== 'Refunded' && (
+                        {user.role === 'Admin' && inv.amount > 0 && inv.status !== 'Refunded' && (
                           <button 
                             onClick={() => handleRefund(inv)} 
                             disabled={isProcessingRefund === inv.id}
