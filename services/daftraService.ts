@@ -1,7 +1,9 @@
 
+import { secureStorage } from '../utils/secureStorage';
+
 /**
  * Daftra API Service for Dhool Dental Clinic
- * Manage API Keys via Settings View
+ * Manage API Keys via Settings View with Encryption
  */
 
 // Helper to get the base URL dynamically or fallback to default
@@ -12,23 +14,26 @@ const getBaseUrl = () => {
     return `https://${domain}/api2`;
 };
 
+// API Key is sensitive, use secureStorage
+const getSecureKey = () => secureStorage.getItem('daftra_api_key') || '';
+
 export const daftraApi = {
-  getApiKey: () => localStorage.getItem('daftra_api_key') || '',
+  getApiKey: getSecureKey,
   getDomain: () => localStorage.getItem('daftra_domain') || 'dhool.daftra.com',
   
   setConfig: (key: string, domain: string) => {
-    localStorage.setItem('daftra_api_key', key);
+    secureStorage.setItem('daftra_api_key', key);
     localStorage.setItem('daftra_domain', domain);
   },
 
   getHeaders: () => ({
-    'API-KEY': localStorage.getItem('daftra_api_key') || '',
+    'API-KEY': getSecureKey(),
     'Content-Type': 'application/json',
     'Accept': 'application/json'
   }),
 
   checkConnection: async () => {
-    const key = localStorage.getItem('daftra_api_key');
+    const key = getSecureKey();
     if (!key) return false;
 
     try {

@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { 
-  Users, Calendar, DollarSign, Package, ChevronRight, Zap, AlertTriangle, TrendingUp, TrendingDown
+  Users, Calendar, DollarSign, Package, ChevronRight, Zap, AlertTriangle, TrendingUp, TrendingDown, Database, CloudCheck
 } from 'lucide-react';
 import { 
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area
@@ -9,7 +9,7 @@ import {
 import { useData } from '../context/DataContext';
 
 const DashboardView: React.FC = () => {
-  const { patients, appointments, inventory, invoices, expenses, salaries } = useData();
+  const { patients, appointments, inventory, invoices, expenses, salaries, isOnline } = useData();
 
   // Financial Integration Logic
   const totalRevenue = invoices
@@ -40,6 +40,12 @@ const DashboardView: React.FC = () => {
           <div className="bg-blue-50 border border-blue-100 px-5 py-3 rounded-2xl flex items-center gap-3 backdrop-blur-md">
              <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
              <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">System Integrated</span>
+          </div>
+          <div className={`px-5 py-3 rounded-2xl flex items-center gap-3 border ${isOnline ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-rose-50 border-rose-100 text-rose-600'}`}>
+             {isOnline ? <Database className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+             <span className="text-[10px] font-black uppercase tracking-widest">
+               {isOnline ? 'Data Protected & Synced' : 'Working Locally (Offline)'}
+             </span>
           </div>
         </div>
       </div>

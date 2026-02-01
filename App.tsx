@@ -26,6 +26,7 @@ import AIAssistantView from './views/AIAssistantView';
 import { firebaseService } from './services/firebaseService';
 import { DataProvider, useData } from './context/DataContext';
 import { DhoolLogo } from './components/DhoolLogo';
+import { secureStorage } from './utils/secureStorage';
 
 const AppContent: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<StaffUser | null>(null);
@@ -42,12 +43,14 @@ const AppContent: React.FC = () => {
 
   useEffect(() => {
     try {
-      const savedUser = localStorage.getItem('dhool_user');
-      if (savedUser) setCurrentUser(JSON.parse(savedUser));
+      // Use secureStorage for encrypted session management
+      const savedUser = secureStorage.getItem('dhool_user');
+      if (savedUser) setCurrentUser(savedUser);
+      
       const savedLang = localStorage.getItem('dhool_lang');
       if (savedLang) setLanguage(savedLang as any);
     } catch (e) {
-      console.error("Local storage error", e);
+      console.error("Storage load error", e);
     }
   }, []);
 
@@ -56,7 +59,8 @@ const AppContent: React.FC = () => {
         const user = await firebaseService.login(email, pass);
         if (user) {
           setCurrentUser(user);
-          localStorage.setItem('dhool_user', JSON.stringify(user));
+          // Save session securely
+          secureStorage.setItem('dhool_user', user);
           return true;
         }
     } catch (e) {
@@ -68,7 +72,7 @@ const AppContent: React.FC = () => {
   const handleLogout = async () => {
     await firebaseService.logout();
     setCurrentUser(null);
-    localStorage.removeItem('dhool_user');
+    secureStorage.removeItem('dhool_user');
     navigate('/');
   };
 
@@ -234,7 +238,7 @@ const AppContent: React.FC = () => {
              <Route path="/appointments" element={<AppointmentsView />} />
              <Route path="/pharmacy" element={<PharmacyView />} />
              <Route path="/suppliers" element={<SuppliersView />} />
-             <Route path="/invoices" element={<BillingView />} />
+             <Route path="/invoices" element={<BillingView user={currentUser} />} />
              <Route path="/expenses" element={<ExpensesView />} />
              <Route path="/salaries" element={<SalariesView />} />
              <Route path="/treasury" element={<TreasuryView />} />
@@ -253,7 +257,7 @@ const AppContent: React.FC = () => {
                      const updated = await updateUserProfile(currentUser.id, updates);
                      if (updated) {
                         setCurrentUser(updated); 
-                        localStorage.setItem('dhool_user', JSON.stringify(updated));
+                        secureStorage.setItem('dhool_user', updated);
                         return { success: true };
                      }
                      return { success: false, error: 'Update failed' };

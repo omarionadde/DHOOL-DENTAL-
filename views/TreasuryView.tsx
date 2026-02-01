@@ -6,22 +6,36 @@ import { useData } from '../context/DataContext';
 const TreasuryView: React.FC = () => {
   const { invoices, expenses, salaries } = useData();
 
-  // Calculate Method Totals
-  const cashInflow = invoices.filter(i => i.method === 'Cash' && i.status === 'Paid').reduce((acc, i) => acc + i.amount, 0);
-  const mobileInflow = invoices.filter(i => i.method === 'EVC-Plus' && i.status === 'Paid').reduce((acc, i) => acc + i.amount, 0);
+  // Actual Inflow: Only positive amounts from 'Paid' or 'Partial' invoices
+  // We exclude 'Refunded' original invoices and the negative 'isRefund' entries from inflow.
+  const cashInflow = invoices
+    .filter(i => i.method === 'Cash' && i.status === 'Paid' && !i.isRefund)
+    .reduce((acc, i) => acc + i.amount, 0);
+    
+  const mobileInflow = invoices
+    .filter(i => i.method === 'EVC-Plus' && i.status === 'Paid' && !i.isRefund)
+    .reduce((acc, i) => acc + i.amount, 0);
   
-  // Refunds (Outflow)
-  const cashRefunds = invoices.filter(i => i.method === 'Cash' && i.status === 'Refunded').reduce((acc, i) => acc + Math.abs(i.amount), 0);
-  const mobileRefunds = invoices.filter(i => i.method === 'EVC-Plus' && i.status === 'Refunded').reduce((acc, i) => acc + Math.abs(i.amount), 0);
+  // Outflow: 
+  // 1. Refunds (isRefund: true entries, which have negative amounts)
+  // 2. Expenses
+  // 3. Salaries
+  const cashRefunds = invoices
+    .filter(i => i.method === 'Cash' && i.isRefund)
+    .reduce((acc, i) => acc + Math.abs(i.amount), 0);
+    
+  const mobileRefunds = invoices
+    .filter(i => i.method === 'EVC-Plus' && i.isRefund)
+    .reduce((acc, i) => acc + Math.abs(i.amount), 0);
 
-  // Assuming expenses are paid from Cash mostly, or generic fund.
-  const totalOutflow = expenses.reduce((acc, i) => acc + i.amount, 0) + salaries.reduce((acc, i) => acc + i.amount, 0);
+  const totalExpenses = expenses.reduce((acc, i) => acc + i.amount, 0);
+  const totalSalaries = salaries.reduce((acc, i) => acc + i.amount, 0);
 
-  // Balances
-  const cashBalance = cashInflow - cashRefunds; // Gross Cash sitting in drawer (before expenses)
-  const mobileBalance = mobileInflow - mobileRefunds; // Gross Mobile Balance
+  // Net Balances
+  const cashBalance = cashInflow - cashRefunds; 
+  const mobileBalance = mobileInflow - mobileRefunds;
 
-  const netTreasury = (cashBalance + mobileBalance) - totalOutflow;
+  const netTreasury = (cashBalance + mobileBalance) - (totalExpenses + totalSalaries);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 max-w-7xl mx-auto">
@@ -39,12 +53,12 @@ const TreasuryView: React.FC = () => {
          <h2 className="text-5xl font-black tracking-tighter mb-6">${netTreasury.toLocaleString(undefined, { minimumFractionDigits: 2 })}</h2>
          <div className="flex gap-4">
             <div className="px-4 py-2 bg-white/10 rounded-xl backdrop-blur-md border border-white/5">
-               <span className="text-[10px] text-slate-400 uppercase tracking-widest block">Total Collected</span>
+               <span className="text-[10px] text-slate-400 uppercase tracking-widest block">Gross Revenue</span>
                <span className="text-lg font-bold text-emerald-400">+${(cashInflow + mobileInflow).toLocaleString()}</span>
             </div>
             <div className="px-4 py-2 bg-white/10 rounded-xl backdrop-blur-md border border-white/5">
-               <span className="text-[10px] text-slate-400 uppercase tracking-widest block">Total Spent/Refunded</span>
-               <span className="text-lg font-bold text-rose-400">-${(totalOutflow + cashRefunds + mobileRefunds).toLocaleString()}</span>
+               <span className="text-[10px] text-slate-400 uppercase tracking-widest block">Total Outflow</span>
+               <span className="text-lg font-bold text-rose-400">-${(totalExpenses + totalSalaries + cashRefunds + mobileRefunds).toLocaleString()}</span>
             </div>
          </div>
       </div>
@@ -71,7 +85,7 @@ const TreasuryView: React.FC = () => {
                   <span className="font-black text-rose-600">-${cashRefunds.toLocaleString()}</span>
                </div>
                <div className="pt-2">
-                  <span className="text-[10px] text-slate-400 uppercase tracking-widest block mb-1">Current Drawer Estimate</span>
+                  <span className="text-[10px] text-slate-400 uppercase tracking-widest block mb-1">Available Cash</span>
                   <span className="text-3xl font-black text-slate-900">${cashBalance.toLocaleString()}</span>
                </div>
             </div>
@@ -123,11 +137,11 @@ const TreasuryView: React.FC = () => {
                   </tr>
                </thead>
                <tbody className="divide-y divide-slate-100">
-                  {/* Combine invoices and expenses for ledger view, limited to 10 */}
                   {[
                      ...invoices.map(i => ({ date: i.date, desc: `INV #${i.id} - ${i.patientName}`, account: i.method, amount: i.amount, type: i.amount < 0 ? 'out' : 'in' })),
-                     ...expenses.map(e => ({ date: e.date, desc: `EXP - ${e.description}`, account: 'General Fund', amount: -e.amount, type: 'out' }))
-                  ].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 10).map((item, idx) => (
+                     ...expenses.map(e => ({ date: e.date, desc: `EXP - ${e.description}`, account: 'General Fund', amount: -e.amount, type: 'out' })),
+                     ...salaries.map(s => ({ date: s.date, desc: `PAYROLL - ${s.staffName}`, account: 'General Fund', amount: -s.amount, type: 'out' }))
+                  ].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 15).map((item, idx) => (
                      <tr key={idx} className="hover:bg-slate-50">
                         <td className="px-8 py-4 text-xs font-bold text-slate-500">{item.date}</td>
                         <td className="px-8 py-4 font-black text-slate-900">{item.desc}</td>

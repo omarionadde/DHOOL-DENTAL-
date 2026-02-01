@@ -70,7 +70,7 @@ export interface Medicine {
   name: string;
   stock: number;
   price: number;
-  costPrice?: number; // Added to track profit
+  costPrice?: number;
   expiryDate: string;
   category: string;
   image?: string;
@@ -118,6 +118,16 @@ export interface Salary {
   amount: number;
   month: string;
   date: string;
+}
+
+export interface ActivityLog {
+  id: string;
+  userId: string;
+  userName: string;
+  action: string;
+  entity: string;
+  details: string;
+  timestamp: string;
 }
 
 export type Role = 'Admin' | 'Doctor' | 'Staff' | 'Accountant';

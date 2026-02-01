@@ -2,10 +2,11 @@
 import { db, auth } from '../lib/firebase';
 import { 
   collection, getDocs, updateDoc, deleteDoc, doc, 
-  query, orderBy, limit, setDoc, getDoc 
+  query, orderBy, setDoc, getDoc, limit 
 } from "firebase/firestore";
-import { signInWithEmailAndPassword, signOut, updatePassword } from "firebase/auth";
-import { Patient, Medicine, Appointment, Invoice, PatientHistory, StaffUser, ClinicalService, Expense, Salary, Prescription, Supplier, LabResult } from '../types';
+import { signInWithEmailAndPassword, signOut, updatePassword, createUserWithEmailAndPassword } from "firebase/auth";
+import { Patient, Medicine, Appointment, Invoice, PatientHistory, StaffUser, ClinicalService, Expense, Salary, Prescription, Supplier, LabResult, ActivityLog } from '../types';
+import { secureStorage } from '../utils/secureStorage';
 
 const KEYS = {
   USERS: 'dhool_local_users',
@@ -19,23 +20,17 @@ const KEYS = {
   HISTORY: 'dhool_local_history',
   PRESCRIPTIONS: 'dhool_local_prescriptions',
   SUPPLIERS: 'dhool_local_suppliers',
-  LABS: 'dhool_local_labs'
+  LABS: 'dhool_local_labs',
+  LOGS: 'dhool_local_logs'
 };
 
-// CRITICAL FIX: Check if API Key is placeholder or missing
-const isConfigInvalid = !auth.app.options.apiKey || auth.app.options.apiKey.includes("YOUR_API_KEY");
-let isDbOffline = isConfigInvalid;
+let isDbOffline = false;
 
-if (isDbOffline) {
-    console.warn("%c DHOOL SYSTEM: OFFLINE MODE ACTIVE (Invalid/Missing API Key) ", "background: #f43f5e; color: white; font-weight: bold; padding: 4px; border-radius: 4px;");
-}
-
-// Helper to handle offline login separately
 const handleOfflineLogin = (email: string, password: string) => {
-    const localUsers: StaffUser[] = JSON.parse(localStorage.getItem(KEYS.USERS) || '[]');
+    const localUsers: StaffUser[] = secureStorage.getItem(KEYS.USERS) || [];
+    const normalizedEmail = email.toLowerCase().trim();
     
-    // Default Admin for Offline Mode if no users exist or specific fallback requested
-    if (email === 'admin@dhool.com' && password === 'admin123') {
+    if (normalizedEmail === 'admin@dhool.com' && password === 'admin123') {
         const defaultAdmin: StaffUser = {
             id: 'offline_admin',
             email: 'admin@dhool.com',
@@ -44,14 +39,39 @@ const handleOfflineLogin = (email: string, password: string) => {
             status: 'Active',
             avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=DhoolAdmin`
         };
-        // Ensure this admin exists in local storage
         if (!localUsers.find(u => u.email === defaultAdmin.email)) {
-            localStorage.setItem(KEYS.USERS, JSON.stringify([...localUsers, defaultAdmin]));
+            secureStorage.setItem(KEYS.USERS, [...localUsers, defaultAdmin]);
         }
         return defaultAdmin;
     }
 
-    return localUsers.find(u => u.email.toLowerCase() === email.toLowerCase() && (u.password === password || !u.password)) || null;
+    return localUsers.find(u => u.email.toLowerCase() === normalizedEmail && (u.password === password || !u.password)) || null;
+};
+
+const handleLocalFallback = (localKey: string, action: string, payload: any) => {
+    let localData = secureStorage.getItem(localKey) || [];
+    
+    if (action === 'get') return localData;
+    
+    if (action === 'insert') {
+      const newItem = Array.isArray(payload) ? payload[0] : payload;
+      if (!newItem.id) newItem.id = Date.now().toString();
+      const filtered = localData.filter((i:any) => i.id !== newItem.id);
+      secureStorage.setItem(localKey, [newItem, ...filtered]);
+      return newItem;
+    }
+    
+    if (action === 'update') {
+      const updatedList = localData.map((item: any) => item.id === payload.id ? { ...item, ...payload.updates } : item);
+      secureStorage.setItem(localKey, updatedList);
+      return payload.updates;
+    }
+    
+    if (action === 'delete') {
+      const updatedList = localData.filter((item: any) => item.id !== payload);
+      secureStorage.setItem(localKey, updatedList);
+      return null;
+    }
 };
 
 const handleRequest = async <T>(
@@ -60,63 +80,32 @@ const handleRequest = async <T>(
   action: 'get' | 'insert' | 'update' | 'delete',
   payload?: any
 ): Promise<T | any> => {
-  if (isDbOffline) {
-    return handleLocalFallback(localKey, action, payload);
-  }
+  if (isDbOffline) return handleLocalFallback(localKey, action, payload);
 
   try {
     const data = await operation();
-    // Background sync to local storage
     try {
-        const currentLocal = JSON.parse(localStorage.getItem(localKey) || '[]');
+        const currentLocal = secureStorage.getItem(localKey) || [];
         if (action === 'get' && Array.isArray(data)) {
-           localStorage.setItem(localKey, JSON.stringify(data));
+           secureStorage.setItem(localKey, data);
         } else if (action === 'insert') {
-           const filtered = currentLocal.filter((i:any) => i.id !== payload.id);
-           localStorage.setItem(localKey, JSON.stringify([data, ...filtered]));
+           const newItem = Array.isArray(payload) ? payload[0] : payload;
+           const dataToStore = (data && typeof data === 'object') ? data : newItem;
+           const filtered = currentLocal.filter((i:any) => i.id !== dataToStore.id);
+           secureStorage.setItem(localKey, [dataToStore, ...filtered]);
         } else if (action === 'update' && payload?.id) {
            const updated = currentLocal.map((i:any) => i.id === payload.id ? {...i, ...payload.updates} : i);
-           localStorage.setItem(localKey, JSON.stringify(updated));
+           secureStorage.setItem(localKey, updated);
         } else if (action === 'delete') {
            const updated = currentLocal.filter((i:any) => i.id !== payload);
-           localStorage.setItem(localKey, JSON.stringify(updated));
+           secureStorage.setItem(localKey, updated);
         }
-    } catch (syncError) { /* ignore */ }
+    } catch (e) {}
     return data;
   } catch (error: any) {
-    console.error(`Firebase operation failed for ${localKey}:`, error);
-    // If permission denied or network error, switch to offline mode for this session
-    if (error.code === 'unavailable' || error.code === 'permission-denied' || error.message?.includes('offline') || error.code === 'auth/api-key-not-valid') {
-        isDbOffline = true;
-    }
+    if (error.code === 'unavailable' || error.code === 'permission-denied') isDbOffline = true;
     return handleLocalFallback(localKey, action, payload);
   }
-};
-
-const handleLocalFallback = (localKey: string, action: string, payload: any) => {
-    let localData = JSON.parse(localStorage.getItem(localKey) || '[]');
-    
-    if (action === 'get') return localData;
-    
-    if (action === 'insert') {
-      const newItem = Array.isArray(payload) ? payload[0] : payload;
-      if (!newItem.id) newItem.id = Date.now().toString();
-      const filtered = localData.filter((i:any) => i.id !== newItem.id);
-      localStorage.setItem(localKey, JSON.stringify([newItem, ...filtered]));
-      return newItem;
-    }
-    
-    if (action === 'update') {
-      const updatedList = localData.map((item: any) => item.id === payload.id ? { ...item, ...payload.updates } : item);
-      localStorage.setItem(localKey, JSON.stringify(updatedList));
-      return payload.updates;
-    }
-    
-    if (action === 'delete') {
-      const updatedList = localData.filter((item: any) => item.id !== payload);
-      localStorage.setItem(localKey, JSON.stringify(updatedList));
-      return null;
-    }
 };
 
 export const firebaseService = {
@@ -124,30 +113,28 @@ export const firebaseService = {
     if (!password) return null;
     const normalizedEmail = email.toLowerCase().trim();
 
-    // 1. If we already know DB is offline/invalid, skip straight to local
-    if (isDbOffline) {
-        return handleOfflineLogin(normalizedEmail, password);
-    }
+    if (isDbOffline) return handleOfflineLogin(normalizedEmail, password);
 
     try {
-      // 2. Try Firebase Auth
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const uid = userCredential.user.uid;
 
-      // 3. Get User Profile
       const userDoc = await getDoc(doc(db, "users", uid));
       if (userDoc.exists()) {
         const userData = { ...userDoc.data(), id: uid } as StaffUser;
+        if (normalizedEmail === 'admin@dhool.com' && userData.role !== 'Admin') {
+            userData.role = 'Admin';
+            await updateDoc(doc(db, "users", uid), { role: 'Admin' });
+        }
         handleLocalFallback(KEYS.USERS, 'insert', userData);
         return userData;
       } 
       
-      // Auto-create profile if missing (First Run logic)
       const newUserProfile: StaffUser = {
           id: uid,
           email: normalizedEmail,
-          name: 'Admin User',
-          role: 'Admin',
+          name: normalizedEmail.split('@')[0],
+          role: normalizedEmail === 'admin@dhool.com' ? 'Admin' : 'Staff',
           status: 'Active',
           avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${uid}`
       };
@@ -156,13 +143,29 @@ export const firebaseService = {
       return newUserProfile;
 
     } catch (error: any) {
-      console.error("Login Error:", error.code);
-      
-      // CRITICAL: Catch Invalid API Key and switch to Offline Mode
-      if (error.code === 'auth/api-key-not-valid' || error.code === 'auth/argument-error' || error.code === 'auth/network-request-failed') {
-          console.warn("Invalid Config Detected. Switching to Offline Mode.");
+      if (error.code === 'auth/network-request-failed') {
           isDbOffline = true;
           return handleOfflineLogin(normalizedEmail, password);
+      }
+      if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found') {
+          const localUser = handleOfflineLogin(normalizedEmail, password);
+          if (localUser) return localUser;
+
+          try {
+             const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+             const uid = userCredential.user.uid;
+             const newUserProfile: StaffUser = {
+                id: uid,
+                email: normalizedEmail,
+                name: 'New Admin',
+                role: normalizedEmail === 'admin@dhool.com' ? 'Admin' : 'Staff',
+                status: 'Active',
+                avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${uid}`
+             };
+             await setDoc(doc(db, "users", uid), newUserProfile);
+             handleLocalFallback(KEYS.USERS, 'insert', newUserProfile);
+             return newUserProfile;
+          } catch (regError) { return null; }
       }
       return null;
     }
@@ -170,215 +173,78 @@ export const firebaseService = {
 
   logout: async () => { try { await signOut(auth); } catch(e) {} },
 
-  // --- USERS ---
-  getUsers: async () => handleRequest(async () => {
-    const q = query(collection(db, "users"), orderBy("name"));
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(d => ({ ...d.data(), id: d.id })) as StaffUser[];
-  }, KEYS.USERS, 'get'),
+  getLogs: () => handleRequest(() => getDocs(query(collection(db, "activity_logs"), orderBy("timestamp", "desc"), limit(100))).then(s => s.docs.map(d => ({ ...d.data(), id: d.id })) as ActivityLog[]), KEYS.LOGS, 'get'),
+  insertLog: (log: ActivityLog) => handleRequest(() => setDoc(doc(db, "activity_logs", log.id), log).then(() => log), KEYS.LOGS, 'insert', log),
 
-  insertUser: async (user: StaffUser) => handleRequest(async () => {
-    await setDoc(doc(db, "users", user.id), user);
-    return user;
-  }, KEYS.USERS, 'insert', user),
+  getUsers: () => handleRequest(() => getDocs(query(collection(db, "users"), orderBy("name"))).then(s => s.docs.map(d => ({ ...d.data(), id: d.id })) as StaffUser[]), KEYS.USERS, 'get'),
+  insertUser: (user: StaffUser) => handleRequest(() => setDoc(doc(db, "users", user.id), user).then(() => user), KEYS.USERS, 'insert', user),
+  updateUser: (id: string, updates: Partial<StaffUser>) => handleRequest(() => updateDoc(doc(db, "users", id), updates).then(() => updates), KEYS.USERS, 'update', { id, updates }),
+  deleteUser: (id: string) => handleRequest(() => deleteDoc(doc(db, "users", id)), KEYS.USERS, 'delete', id),
 
-  updateUser: async (id: string, updates: Partial<StaffUser>) => handleRequest(async () => {
-    await updateDoc(doc(db, "users", id), updates);
-    if (updates.password && auth.currentUser && auth.currentUser.uid === id && !isDbOffline) {
-       try { await updatePassword(auth.currentUser, updates.password); } catch(e) {}
-    }
-    return updates;
-  }, KEYS.USERS, 'update', { id, updates }),
+  getPatients: () => handleRequest(() => getDocs(query(collection(db, "patients"), orderBy("name"))).then(s => s.docs.map(d => ({ ...d.data(), id: d.id })) as Patient[]), KEYS.PATIENTS, 'get'),
+  insertPatient: (p: Patient) => handleRequest(() => setDoc(doc(db, "patients", p.id), p).then(() => p), KEYS.PATIENTS, 'insert', p),
+  updatePatient: (id: string, updates: Partial<Patient>) => handleRequest(() => updateDoc(doc(db, "patients", id), updates).then(() => updates), KEYS.PATIENTS, 'update', { id, updates }),
+  deletePatient: (id: string) => handleRequest(() => deleteDoc(doc(db, "patients", id)), KEYS.PATIENTS, 'delete', id),
 
-  deleteUser: async (id: string) => handleRequest(async () => {
-    await deleteDoc(doc(db, "users", id));
-  }, KEYS.USERS, 'delete', id),
+  getInventory: () => handleRequest(() => getDocs(query(collection(db, "inventory"), orderBy("name"))).then(s => s.docs.map(d => ({ ...d.data(), id: d.id })) as Medicine[]), KEYS.INVENTORY, 'get'),
+  insertMedicine: (m: Medicine) => handleRequest(() => setDoc(doc(db, "inventory", m.id), m).then(() => m), KEYS.INVENTORY, 'insert', m),
+  updateMedicine: (id: string, updates: Partial<Medicine>) => handleRequest(() => updateDoc(doc(db, "inventory", id), updates).then(() => updates), KEYS.INVENTORY, 'update', { id, updates }),
+  deleteMedicine: (id: string) => handleRequest(() => deleteDoc(doc(db, "inventory", id)), KEYS.INVENTORY, 'delete', id),
 
-  // --- PATIENTS ---
-  getPatients: async () => handleRequest(async () => {
-    const q = query(collection(db, "patients"), orderBy("name"));
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(d => ({ ...d.data(), id: d.id })) as Patient[];
-  }, KEYS.PATIENTS, 'get'),
+  getServices: () => handleRequest(() => getDocs(query(collection(db, "services"), orderBy("name"))).then(s => s.docs.map(d => ({ ...d.data(), id: d.id })) as ClinicalService[]), KEYS.SERVICES, 'get'),
+  insertService: (s: ClinicalService) => handleRequest(() => setDoc(doc(db, "services", s.id), s).then(() => s), KEYS.SERVICES, 'insert', s),
+  deleteService: (id: string) => handleRequest(() => deleteDoc(doc(db, "services", id)), KEYS.SERVICES, 'delete', id),
 
-  insertPatient: async (patient: Patient) => handleRequest(async () => {
-    await setDoc(doc(db, "patients", patient.id), patient);
-    return patient;
-  }, KEYS.PATIENTS, 'insert', patient),
+  getAppointments: () => handleRequest(() => getDocs(query(collection(db, "appointments"), orderBy("date", "desc"))).then(s => s.docs.map(d => ({ ...d.data(), id: d.id })) as Appointment[]), KEYS.APPOINTMENTS, 'get'),
+  insertAppointment: (a: Appointment) => handleRequest(() => setDoc(doc(db, "appointments", a.id), a).then(() => a), KEYS.APPOINTMENTS, 'insert', a),
 
-  updatePatient: async (id: string, updates: Partial<Patient>) => handleRequest(async () => {
-    await updateDoc(doc(db, "patients", id), updates);
-    return updates;
-  }, KEYS.PATIENTS, 'update', { id, updates }),
-
-  deletePatient: async (id: string) => handleRequest(async () => {
-    await deleteDoc(doc(db, "patients", id));
-  }, KEYS.PATIENTS, 'delete', id),
-
-  // --- INVENTORY ---
-  getInventory: async () => handleRequest(async () => {
-    const q = query(collection(db, "inventory"), orderBy("name"));
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(d => ({ ...d.data(), id: d.id })) as Medicine[];
-  }, KEYS.INVENTORY, 'get'),
-
-  insertMedicine: async (medicine: Medicine) => handleRequest(async () => {
-    await setDoc(doc(db, "inventory", medicine.id), medicine);
-    return medicine;
-  }, KEYS.INVENTORY, 'insert', medicine),
-
-  updateMedicine: async (id: string, updates: Partial<Medicine>) => handleRequest(async () => {
-    await updateDoc(doc(db, "inventory", id), updates);
-    return updates;
-  }, KEYS.INVENTORY, 'update', { id, updates }),
-
-  deleteMedicine: async (id: string) => handleRequest(async () => {
-    await deleteDoc(doc(db, "inventory", id));
-  }, KEYS.INVENTORY, 'delete', id),
-
-  // --- SERVICES ---
-  getServices: async () => handleRequest(async () => {
-    const q = query(collection(db, "services"), orderBy("name"));
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(d => ({ ...d.data(), id: d.id })) as ClinicalService[];
-  }, KEYS.SERVICES, 'get'),
-
-  insertService: async (service: ClinicalService) => handleRequest(async () => {
-    await setDoc(doc(db, "services", service.id), service);
-    return service;
-  }, KEYS.SERVICES, 'insert', service),
-
-  deleteService: async (id: string) => handleRequest(async () => {
-    await deleteDoc(doc(db, "services", id));
-  }, KEYS.SERVICES, 'delete', id),
-
-  // --- APPOINTMENTS ---
-  getAppointments: async () => handleRequest(async () => {
-    const q = query(collection(db, "appointments"), orderBy("date", "desc"));
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(d => ({ ...d.data(), id: d.id })) as Appointment[];
-  }, KEYS.APPOINTMENTS, 'get'),
-
-  insertAppointment: async (appointment: Appointment) => handleRequest(async () => {
-    await setDoc(doc(db, "appointments", appointment.id), appointment);
-    return appointment;
-  }, KEYS.APPOINTMENTS, 'insert', appointment),
-
-  // --- INVOICES ---
-  getInvoices: async () => handleRequest(async () => {
-    const q = query(collection(db, "invoices"), orderBy("date", "desc"));
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(d => ({ ...d.data(), id: d.id })) as Invoice[];
-  }, KEYS.INVOICES, 'get'),
-
+  getInvoices: () => handleRequest(() => getDocs(query(collection(db, "invoices"), orderBy("date", "desc"))).then(s => s.docs.map(d => ({ ...d.data(), id: d.id })) as Invoice[]), KEYS.INVOICES, 'get'),
+  updateInvoice: (id: string, updates: Partial<Invoice>) => handleRequest(() => updateDoc(doc(db, "invoices", id), updates).then(() => updates), KEYS.INVOICES, 'update', { id, updates }),
   createTransaction: async (invoice: Invoice, itemsToDeduct?: { id: string; quantity: number, currentStock: number }[]) => {
     if (isDbOffline) return handleLocalTransaction(invoice, itemsToDeduct);
     try {
         await setDoc(doc(db, "invoices", invoice.id), invoice);
         if (itemsToDeduct && itemsToDeduct.length > 0) {
-            const batch = itemsToDeduct.map(item => {
-                const newStock = Math.max(0, item.currentStock - item.quantity);
-                return updateDoc(doc(db, "inventory", item.id), { stock: newStock });
-            });
-            await Promise.all(batch);
+            await Promise.all(itemsToDeduct.map(item => updateDoc(doc(db, "inventory", item.id), { stock: Math.max(0, item.currentStock - item.quantity) })));
         }
         handleLocalTransaction(invoice, itemsToDeduct);
         return true;
-    } catch (e: any) {
-        if (e.code === 'auth/api-key-not-valid' || e.code === 'permission-denied') isDbOffline = true;
+    } catch (e) {
         return handleLocalTransaction(invoice, itemsToDeduct);
     }
   },
 
-  // --- EXPENSES ---
-  getExpenses: async () => handleRequest(async () => {
-    const q = query(collection(db, "expenses"), orderBy("date", "desc"));
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(d => ({ ...d.data(), id: d.id })) as Expense[];
-  }, KEYS.EXPENSES, 'get'),
+  getExpenses: () => handleRequest(() => getDocs(query(collection(db, "expenses"), orderBy("date", "desc"))).then(s => s.docs.map(d => ({ ...d.data(), id: d.id })) as Expense[]), KEYS.EXPENSES, 'get'),
+  insertExpense: (e: Expense) => handleRequest(() => setDoc(doc(db, "expenses", e.id), e).then(() => e), KEYS.EXPENSES, 'insert', e),
 
-  insertExpense: async (expense: Expense) => handleRequest(async () => {
-    await setDoc(doc(db, "expenses", expense.id), expense);
-    return expense;
-  }, KEYS.EXPENSES, 'insert', expense),
+  getSalaries: () => handleRequest(() => getDocs(query(collection(db, "salaries"), orderBy("date", "desc"))).then(s => s.docs.map(d => ({ ...d.data(), id: d.id })) as Salary[]), KEYS.SALARIES, 'get'),
+  insertSalary: (s: Salary) => handleRequest(() => setDoc(doc(db, "salaries", s.id), s).then(() => s), KEYS.SALARIES, 'insert', s),
 
-  // --- SALARIES ---
-  getSalaries: async () => handleRequest(async () => {
-    const q = query(collection(db, "salaries"), orderBy("date", "desc"));
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(d => ({ ...d.data(), id: d.id })) as Salary[];
-  }, KEYS.SALARIES, 'get'),
+  getSuppliers: () => handleRequest(() => getDocs(query(collection(db, "suppliers"), orderBy("name"))).then(s => s.docs.map(d => ({ ...d.data(), id: d.id })) as Supplier[]), KEYS.SUPPLIERS, 'get'),
+  insertSupplier: (s: Supplier) => handleRequest(() => setDoc(doc(db, "suppliers", s.id), s).then(() => s), KEYS.SUPPLIERS, 'insert', s),
+  updateSupplier: (id: string, updates: Partial<Supplier>) => handleRequest(() => updateDoc(doc(db, "suppliers", id), updates).then(() => updates), KEYS.SUPPLIERS, 'update', { id, updates }),
 
-  insertSalary: async (salary: Salary) => handleRequest(async () => {
-    await setDoc(doc(db, "salaries", salary.id), salary);
-    return salary;
-  }, KEYS.SALARIES, 'insert', salary),
+  getLabResults: () => handleRequest(() => getDocs(query(collection(db, "lab_results"), orderBy("date", "desc"))).then(s => s.docs.map(d => ({ ...d.data(), id: d.id })) as LabResult[]), KEYS.LABS, 'get'),
+  insertLabResult: (l: LabResult) => handleRequest(() => setDoc(doc(db, "lab_results", l.id), l).then(() => l), KEYS.LABS, 'insert', l),
 
-  // --- SUPPLIERS ---
-  getSuppliers: async () => handleRequest(async () => {
-    const q = query(collection(db, "suppliers"), orderBy("name"));
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(d => ({ ...d.data(), id: d.id })) as Supplier[];
-  }, KEYS.SUPPLIERS, 'get'),
-
-  insertSupplier: async (supplier: Supplier) => handleRequest(async () => {
-    await setDoc(doc(db, "suppliers", supplier.id), supplier);
-    return supplier;
-  }, KEYS.SUPPLIERS, 'insert', supplier),
-
-  updateSupplier: async (id: string, updates: Partial<Supplier>) => handleRequest(async () => {
-    await updateDoc(doc(db, "suppliers", id), updates);
-    return updates;
-  }, KEYS.SUPPLIERS, 'update', { id, updates }),
-
-  // --- LABS ---
-  getLabResults: async () => handleRequest(async () => {
-    const q = query(collection(db, "lab_results"), orderBy("date", "desc"));
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(d => ({ ...d.data(), id: d.id })) as LabResult[];
-  }, KEYS.LABS, 'get'),
-
-  insertLabResult: async (lab: LabResult) => handleRequest(async () => {
-    await setDoc(doc(db, "lab_results", lab.id), lab);
-    return lab;
-  }, KEYS.LABS, 'insert', lab),
-
-  // --- HISTORY ---
-  insertHistory: async (history: PatientHistory) => handleRequest(async () => {
-    await setDoc(doc(db, "patient_history", history.id), history);
-    return history;
-  }, KEYS.HISTORY, 'insert', history),
-
-  // --- PRESCRIPTIONS ---
-  getPrescriptions: async () => handleRequest(async () => {
-    const q = query(collection(db, "prescriptions"), orderBy("date", "desc"));
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(d => ({ ...d.data(), id: d.id })) as Prescription[];
-  }, KEYS.PRESCRIPTIONS, 'get'),
-
-  insertPrescription: async (rx: Prescription) => handleRequest(async () => {
-    await setDoc(doc(db, "prescriptions", rx.id), rx);
-    return rx;
-  }, KEYS.PRESCRIPTIONS, 'insert', rx),
-
-  deletePrescription: async (id: string) => handleRequest(async () => {
-    await deleteDoc(doc(db, "prescriptions", id));
-  }, KEYS.PRESCRIPTIONS, 'delete', id)
+  getPrescriptions: () => handleRequest(() => getDocs(query(collection(db, "prescriptions"), orderBy("date", "desc"))).then(s => s.docs.map(d => ({ ...d.data(), id: d.id })) as Prescription[]), KEYS.PRESCRIPTIONS, 'get'),
+  insertPrescription: (rx: Prescription) => handleRequest(() => setDoc(doc(db, "prescriptions", rx.id), rx).then(() => rx), KEYS.PRESCRIPTIONS, 'insert', rx),
+  deletePrescription: (id: string) => handleRequest(() => deleteDoc(doc(db, "prescriptions", id)), KEYS.PRESCRIPTIONS, 'delete', id),
+  
+  insertHistory: (h: PatientHistory) => handleRequest(() => setDoc(doc(db, "patient_history", h.id), h).then(() => h), KEYS.HISTORY, 'insert', h)
 };
 
-// Internal Helper for Local Transactions
 const handleLocalTransaction = (invoice: Invoice, itemsToDeduct?: { id: string; quantity: number, currentStock: number }[]) => {
-    let local = JSON.parse(localStorage.getItem(KEYS.INVOICES) || '[]');
-    localStorage.setItem(KEYS.INVOICES, JSON.stringify([invoice, ...local]));
-    
+    let local = secureStorage.getItem(KEYS.INVOICES) || [];
+    secureStorage.setItem(KEYS.INVOICES, [invoice, ...local]);
     if (itemsToDeduct) {
-        let localInv = JSON.parse(localStorage.getItem(KEYS.INVENTORY) || '[]');
+        let localInv = secureStorage.getItem(KEYS.INVENTORY) || [];
         localInv = localInv.map((p: any) => {
             const deduction = itemsToDeduct.find(d => d.id === p.id);
             if (deduction) return { ...p, stock: Math.max(0, p.stock - deduction.quantity) };
             return p;
         });
-        localStorage.setItem(KEYS.INVENTORY, JSON.stringify(localInv));
+        secureStorage.setItem(KEYS.INVENTORY, localInv);
     }
     return true;
-}
+};

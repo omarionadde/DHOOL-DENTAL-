@@ -1,28 +1,32 @@
-
+// Fix: Removing leading empty lines to resolve line number mismatch and ensuring correct modular SDK imports.
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
-
-/**
- * FADLAN RAAC TALLAABOOYINKAN:
- * 1. Tag https://console.firebase.google.com/project/dhool-6bb8f/settings/general/
- * 2. Hoos u deji ilaa "Your apps"
- * 3. Copy ka soo dheh "SDK setup and configuration" (ka dooro 'Config')
- * 4. Ku bedel xogta hoose midkaaga rasmiga ah.
- */
+import { getAnalytics } from "firebase/analytics";
 
 const firebaseConfig = {
-  // Ku bedel 'AIza...' koodhkaaga saxda ah ee Firebase Console-ka
-  apiKey: "YOUR_API_KEY_HERE", 
+  apiKey: "AIzaSyAsH4xGoCqZvrANGCRfjF1BntV9Ob5bqAk",
   authDomain: "dhool-6bb8f.firebaseapp.com",
+  databaseURL: "https://dhool-6bb8f-default-rtdb.firebaseio.com",
   projectId: "dhool-6bb8f",
   storageBucket: "dhool-6bb8f.firebasestorage.app",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID",
-  measurementId: "YOUR_MEASUREMENT_ID"
+  messagingSenderId: "933427633145",
+  appId: "1:933427633145:web:c118266c4df786b46d7b28",
+  measurementId: "G-VTEJHTTN13"
 };
 
-// Initialize Firebase
+// Initialize Firebase using the modular SDK pattern
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+
+// Initialize Analytics safely
+let analytics;
+try {
+  if (typeof window !== "undefined") {
+    analytics = getAnalytics(app);
+  }
+} catch (e) {
+  console.warn("Firebase Analytics failed to initialize:", e);
+}
+export { analytics };
