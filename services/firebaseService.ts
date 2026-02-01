@@ -27,6 +27,7 @@ const KEYS = {
 let isDbOffline = false;
 
 const handleOfflineLogin = (email: string, password: string) => {
+    console.warn("Using Offline Login Fallback");
     const localUsers: StaffUser[] = secureStorage.getItem(KEYS.USERS) || [];
     const normalizedEmail = email.toLowerCase().trim();
     
@@ -103,7 +104,11 @@ const handleRequest = async <T>(
     } catch (e) {}
     return data;
   } catch (error: any) {
-    if (error.code === 'unavailable' || error.code === 'permission-denied') isDbOffline = true;
+    console.error(`Firebase Error [${action}]:`, error);
+    if (error.code === 'unavailable' || error.code === 'permission-denied') {
+        console.warn("Switching to offline mode due to permission/availability error.");
+        isDbOffline = true;
+    }
     return handleLocalFallback(localKey, action, payload);
   }
 };
@@ -122,6 +127,7 @@ export const firebaseService = {
       const userDoc = await getDoc(doc(db, "users", uid));
       if (userDoc.exists()) {
         const userData = { ...userDoc.data(), id: uid } as StaffUser;
+        // Auto-fix admin role for hardcoded admin email
         if (normalizedEmail === 'admin@dhool.com' && userData.role !== 'Admin') {
             userData.role = 'Admin';
             await updateDoc(doc(db, "users", uid), { role: 'Admin' });
@@ -130,6 +136,7 @@ export const firebaseService = {
         return userData;
       } 
       
+      // If user exists in Auth but not in Firestore (e.g. first login)
       const newUserProfile: StaffUser = {
           id: uid,
           email: normalizedEmail,
@@ -143,14 +150,18 @@ export const firebaseService = {
       return newUserProfile;
 
     } catch (error: any) {
+      console.error("Firebase Login Error:", error.code, error.message);
+      
       if (error.code === 'auth/network-request-failed') {
           isDbOffline = true;
           return handleOfflineLogin(normalizedEmail, password);
       }
       if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found') {
+          // Check local fallback first
           const localUser = handleOfflineLogin(normalizedEmail, password);
           if (localUser) return localUser;
 
+          // Attempt registration if not found (Optional: remove this for stricter security)
           try {
              const userCredential = await createUserWithEmailAndPassword(auth, email, password);
              const uid = userCredential.user.uid;
@@ -165,7 +176,10 @@ export const firebaseService = {
              await setDoc(doc(db, "users", uid), newUserProfile);
              handleLocalFallback(KEYS.USERS, 'insert', newUserProfile);
              return newUserProfile;
-          } catch (regError) { return null; }
+          } catch (regError) { 
+              console.error("Registration failed:", regError);
+              return null; 
+          }
       }
       return null;
     }
@@ -210,6 +224,7 @@ export const firebaseService = {
         handleLocalTransaction(invoice, itemsToDeduct);
         return true;
     } catch (e) {
+        console.error("Transaction Error:", e);
         return handleLocalTransaction(invoice, itemsToDeduct);
     }
   },
