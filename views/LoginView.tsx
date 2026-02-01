@@ -81,7 +81,7 @@ const LoginView: React.FC<Props> = ({ onLogin }) => {
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 className="w-full bg-slate-800/50 border border-slate-700 text-white rounded-2xl pl-12 pr-4 py-4 outline-none focus:border-blue-500 focus:bg-slate-800 transition-all font-bold placeholder:text-slate-600"
-                placeholder="admin@dhool.com"
+                placeholder="Enter your email"
               />
               <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
             </div>
@@ -111,16 +111,6 @@ const LoginView: React.FC<Props> = ({ onLogin }) => {
             {!isLoading && <ChevronRight className="w-4 h-4" />}
           </button>
         </form>
-
-        <div className="mt-8 text-center border-t border-white/5 pt-6">
-          <p className="text-slate-500 text-[10px] uppercase tracking-widest mb-1">
-            Emergency / Offline Access:
-          </p>
-          <div className="bg-white/5 p-3 rounded-xl border border-white/5 inline-block w-full">
-            <p className="text-emerald-400 text-xs font-mono font-bold">admin@dhool.com</p>
-            <p className="text-emerald-400 text-xs font-mono font-bold">admin123</p>
-          </div>
-        </div>
       </div>
     </div>
   );
