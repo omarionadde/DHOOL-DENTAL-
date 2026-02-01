@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { Patient, PatientHistory, Prescription, StaffUser, LabResult } from '../types';
-import { Trash2, Printer, Plus, FileText, Pill, X, Save, Clock, ClipboardList, User, Microscope, Sparkles, AlertCircle, ChevronRight, CheckCircle2, FileDown } from 'lucide-react';
+import { Trash2, Printer, Plus, FileText, Pill, X, Save, Clock, ClipboardList, User, Microscope, Sparkles, AlertCircle, ChevronRight, CheckCircle2, FileDown, Wallet, CreditCard, DollarSign } from 'lucide-react';
 import { getAIAssistance } from '../services/geminiService';
 import { PrescriptionPrint } from '../components/PrescriptionPrint';
 import { PatientReportPrint } from '../components/PatientReportPrint';
@@ -14,7 +14,7 @@ interface Props {
 
 const PatientsView: React.FC<Props> = ({ user, t }) => {
   const { 
-    patients, addNewPatient, deletePat, 
+    patients, addNewPatient, deletePat, processPatientPayment, updatePat,
     patientHistory, addNewHistory, prescriptions, addNewPrescription, removePrescription,
     labResults, addNewLabResult, inventory
   } = useData();
@@ -33,6 +33,11 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
   const [phone, setPhone] = useState('');
   const [condition, setCondition] = useState('');
 
+  // Payment Form
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('Cash');
+  const [manualDebt, setManualDebt] = useState('');
+
   // History Form
   const [diagnosis, setDiagnosis] = useState('');
   const [treatment, setTreatment] = useState('');
@@ -48,7 +53,7 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
   const [rxForm, setRxForm] = useState({ name: '', dosage: '', frequency: '', duration: '' });
   const [showSuccess, setShowSuccess] = useState(false);
 
-  const [detailTab, setDetailTab] = useState<'info' | 'history' | 'prescription' | 'labs'>('info');
+  const [detailTab, setDetailTab] = useState<'info' | 'history' | 'prescription' | 'labs' | 'financial'>('info');
 
   const handleGetAiSummary = async () => {
     if (!selectedPatient) return;
@@ -89,7 +94,8 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
       phone,
       lastVisit: new Date().toISOString().split('T')[0],
       medicalHistory: [],
-      condition: condition || 'Checkup'
+      condition: condition || 'Checkup',
+      balance: 0
     };
     await addNewPatient(newPatient);
     setShowAddModal(false);
@@ -110,6 +116,31 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
     };
     await addNewHistory(newHistory);
     setDiagnosis(''); setTreatment(''); setNotes('');
+  };
+
+  const handlePayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPatient || !paymentAmount) return;
+    const amount = parseFloat(paymentAmount);
+    if (isNaN(amount) || amount <= 0) return;
+
+    await processPatientPayment(selectedPatient.id, amount, paymentMethod);
+    // Update local view
+    setSelectedPatient(prev => prev ? {...prev, balance: (prev.balance || 0) - amount} : null);
+    setPaymentAmount('');
+    alert("Payment processed successfully!");
+  };
+
+  const handleAddManualDebt = async (e: React.FormEvent) => {
+     e.preventDefault();
+     if (!selectedPatient || !manualDebt) return;
+     const amount = parseFloat(manualDebt);
+     if (isNaN(amount) || amount <= 0) return;
+     
+     const newBalance = (selectedPatient.balance || 0) + amount;
+     await updatePat(selectedPatient.id, { balance: newBalance });
+     setSelectedPatient(prev => prev ? {...prev, balance: newBalance} : null);
+     setManualDebt('');
   };
 
   // Prescription Handlers
@@ -208,6 +239,13 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
                </div>
              </div>
              
+             {patient.balance && patient.balance > 0 ? (
+                <div className="mb-4 bg-rose-50 border border-rose-100 p-2 rounded-xl text-center">
+                   <p className="text-[9px] font-black text-rose-400 uppercase tracking-widest">Outstanding Debt</p>
+                   <p className="text-lg font-black text-rose-600">${patient.balance.toFixed(2)}</p>
+                </div>
+             ) : null}
+
              <div className="bg-slate-50 rounded-2xl p-4 space-y-3 mt-auto">
                 <div className="flex justify-between items-center"><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Age</span><span className="font-black text-slate-900 text-sm">{patient.age}</span></div>
                 <div className="flex justify-between items-center"><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Last Visit</span><span className="font-black text-slate-900 text-[10px]">{patient.lastVisit}</span></div>
@@ -253,6 +291,7 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
                  <TabButton active={detailTab === 'history'} onClick={() => setDetailTab('history')} icon={<ClipboardList className="w-4 h-4" />} label="Clinical History" />
                  <TabButton active={detailTab === 'prescription'} onClick={() => setDetailTab('prescription')} icon={<Pill className="w-4 h-4" />} label="Prescription" />
                  <TabButton active={detailTab === 'labs'} onClick={() => setDetailTab('labs')} icon={<Microscope className="w-4 h-4" />} label="Laboratory" />
+                 <TabButton active={detailTab === 'financial'} onClick={() => setDetailTab('financial')} icon={<Wallet className="w-4 h-4" />} label="Financial & Debt" />
               </div>
 
               <div className="flex-1 overflow-y-auto p-10 bg-slate-50/50 no-scrollbar">
@@ -279,6 +318,48 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
                          <Microscope className="w-20 h-20 mb-4 text-slate-300" />
                          <p className="font-bold text-slate-400 uppercase tracking-widest text-[10px]">No Imaging Uploaded</p>
                       </div>
+                    </div>
+                 )}
+
+                 {detailTab === 'financial' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                       <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
+                          <h3 className="text-xl font-black text-slate-900 mb-6 tracking-tight flex items-center gap-3">
+                             <Wallet className="w-6 h-6 text-slate-400" /> Current Standing
+                          </h3>
+                          <div className={`p-8 rounded-[2rem] text-center mb-8 ${ (selectedPatient.balance || 0) > 0 ? 'bg-rose-50 border border-rose-100' : 'bg-emerald-50 border border-emerald-100' }`}>
+                             <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-2 ${ (selectedPatient.balance || 0) > 0 ? 'text-rose-400' : 'text-emerald-400' }`}>Total Outstanding Debt</p>
+                             <h2 className={`text-5xl font-black tracking-tighter ${ (selectedPatient.balance || 0) > 0 ? 'text-rose-600' : 'text-emerald-600' }`}>${(selectedPatient.balance || 0).toFixed(2)}</h2>
+                          </div>
+
+                          <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Manual Adjustment (Add Debt)</h4>
+                          <form onSubmit={handleAddManualDebt} className="flex gap-4 mb-6">
+                             <input type="number" step="0.01" value={manualDebt} onChange={e => setManualDebt(e.target.value)} placeholder="Amount..." className="flex-1 p-4 bg-slate-50 rounded-2xl outline-none font-bold text-sm" />
+                             <button type="submit" className="px-6 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px]">Add Charge</button>
+                          </form>
+                       </div>
+
+                       <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
+                          <h3 className="text-xl font-black text-slate-900 mb-6 tracking-tight flex items-center gap-3">
+                             <DollarSign className="w-6 h-6 text-slate-400" /> Process Payment
+                          </h3>
+                          <form onSubmit={handlePayment} className="space-y-4">
+                             <div className="space-y-1">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Payment Amount</label>
+                                <input required type="number" step="0.01" value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-sm border-2 border-transparent focus:border-blue-500 transition-all" placeholder="0.00" />
+                             </div>
+                             <div className="space-y-1">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Method</label>
+                                <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-sm appearance-none">
+                                   <option value="Cash">Cash</option>
+                                   <option value="EVC-Plus">EVC-Plus / Zaad</option>
+                                </select>
+                             </div>
+                             <button type="submit" className="w-full py-5 bg-emerald-600 text-white font-black rounded-2xl uppercase tracking-widest text-[10px] shadow-lg hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 mt-4">
+                               <CheckCircle2 className="w-4 h-4" /> Receive Payment
+                             </button>
+                          </form>
+                       </div>
                     </div>
                  )}
 

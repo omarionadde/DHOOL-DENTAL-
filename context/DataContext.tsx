@@ -27,6 +27,7 @@ interface DataContextType {
   addNewPatient: (p: Patient) => Promise<void>;
   updatePat: (id: string, p: Partial<Patient>) => Promise<void>;
   deletePat: (id: string) => Promise<void>;
+  processPatientPayment: (patientId: string, amount: number, method: string) => Promise<void>;
   
   // History
   addNewHistory: (h: PatientHistory) => Promise<void>;
@@ -204,6 +205,34 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
     await firebaseService.deletePatient(id);
     await logAction('DELETE', 'PATIENT', `Removed patient: ${p?.name || id}`);
+  };
+
+  const processPatientPayment = async (patientId: string, amount: number, method: string) => {
+    // 1. Update Patient Balance
+    const patient = patients.find(p => p.id === patientId);
+    if (!patient) return;
+
+    const currentBalance = patient.balance || 0;
+    const newBalance = currentBalance - amount;
+
+    await updatePat(patientId, { balance: newBalance });
+
+    // 2. Create Transaction for Treasury
+    const paymentInv: Invoice = {
+      id: `PAY-${Date.now().toString().slice(-6)}`,
+      patientName: patient.name,
+      date: new Date().toISOString().split('T')[0],
+      amount: amount,
+      discount: 0,
+      totalPaid: amount,
+      status: 'Paid',
+      type: 'Dental', // Or 'Payment' if type allowed
+      method: method,
+      isRefund: false
+    };
+
+    await addTransaction(paymentInv);
+    await logAction('PAYMENT', 'PATIENT', `Received payment of $${amount} from ${patient.name}. New Balance: $${newBalance}`);
   };
 
   const addNewHistory = async (h: PatientHistory) => {
@@ -427,7 +456,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   return (
     <DataContext.Provider value={{
       patients, inventory, clinicalServices, appointments, invoices, expenses, salaries, users, patientHistory, prescriptions, suppliers, labResults, activityLogs,
-      refreshData, addNewPatient, updatePat, deletePat, addNewHistory, addNewPrescription, removePrescription, addNewLabResult, addNewMedicine, updateMed, deleteMed, 
+      refreshData, addNewPatient, updatePat, deletePat, processPatientPayment, addNewHistory, addNewPrescription, removePrescription, addNewLabResult, addNewMedicine, updateMed, deleteMed, 
       addNewService, removeService, addNewSupplier, updateSupplier, addTransaction, updateInvoiceStatus, addNewAppointment, addExpense, addSalary,
       addNewUser, removeUser, updateUserProfile, isLoading, isOnline
     }}>
