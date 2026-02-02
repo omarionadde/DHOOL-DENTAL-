@@ -94,7 +94,7 @@ export const PrescriptionPrint: React.FC<PrescriptionPrintProps> = ({
               </div>
               <div className="text-right">
                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Sex</p>
-                <p className="text-lg font-black text-slate-900">M/F</p>
+                <p className="text-lg font-black text-slate-900">{patient.gender || 'N/A'}</p>
               </div>
             </div>
           </div>

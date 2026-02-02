@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { Patient, PatientHistory, Prescription, StaffUser, LabResult } from '../types';
-import { Trash2, Printer, Plus, FileText, Pill, X, Save, Clock, ClipboardList, User, Microscope, Sparkles, AlertCircle, ChevronRight, CheckCircle2, FileDown, Wallet, CreditCard, DollarSign } from 'lucide-react';
+import { Trash2, Printer, Plus, FileText, Pill, X, Save, Clock, ClipboardList, User, Microscope, Sparkles, AlertCircle, ChevronRight, CheckCircle2, FileDown, Wallet, CreditCard, DollarSign, LayoutGrid } from 'lucide-react';
 import { getAIAssistance } from '../services/geminiService';
 import { PrescriptionPrint } from '../components/PrescriptionPrint';
 import { PatientReportPrint } from '../components/PatientReportPrint';
@@ -27,9 +27,13 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
   const [printingRx, setPrintingRx] = useState<Prescription | null>(null);
   const [showReportPrint, setShowReportPrint] = useState(false);
   
+  // Registration State
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   // Forms
   const [name, setName] = useState('');
   const [age, setAge] = useState('');
+  const [gender, setGender] = useState<'Male' | 'Female'>('Male');
   const [phone, setPhone] = useState('');
   const [condition, setCondition] = useState('');
 
@@ -53,7 +57,11 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
   const [rxForm, setRxForm] = useState({ name: '', dosage: '', frequency: '', duration: '' });
   const [showSuccess, setShowSuccess] = useState(false);
 
-  const [detailTab, setDetailTab] = useState<'info' | 'history' | 'prescription' | 'labs' | 'financial'>('info');
+  // Dental Chart State
+  const [selectedTooth, setSelectedTooth] = useState<number | null>(null);
+  const [toothStatusAction, setToothStatusAction] = useState<'Healthy' | 'Decay' | 'Filled' | 'Missing' | 'Crown' | 'RootCanal'>('Healthy');
+
+  const [detailTab, setDetailTab] = useState<'info' | 'chart' | 'history' | 'prescription' | 'labs' | 'financial'>('info');
 
   const handleGetAiSummary = async () => {
     if (!selectedPatient) return;
@@ -63,7 +71,7 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
       .map(h => `${h.date}: ${h.diagnosis} - ${h.treatment}`)
       .join(', ');
     
-    const prompt = `Please provide a concise medical summary for patient ${selectedPatient.name}, age ${selectedPatient.age}. Their clinical history includes: ${historyText}. Identify potential risks or follow-up needs.`;
+    const prompt = `Please provide a concise medical summary for patient ${selectedPatient.name}, age ${selectedPatient.age}, gender ${selectedPatient.gender || 'Unknown'}. Their clinical history includes: ${historyText}. Identify potential risks or follow-up needs.`;
     const summary = await getAIAssistance(prompt, "You are a clinical analytical tool.");
     setAiSummary(summary);
     setIsAiLoading(false);
@@ -87,19 +95,41 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
 
   const handleAddPatient = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newPatient: Patient = {
-      id: Date.now().toString(),
-      name,
-      age: parseInt(age),
-      phone,
-      lastVisit: new Date().toISOString().split('T')[0],
-      medicalHistory: [],
-      condition: condition || 'Checkup',
-      balance: 0
-    };
-    await addNewPatient(newPatient);
-    setShowAddModal(false);
-    setName(''); setAge(''); setPhone(''); setCondition('');
+    if (isSubmitting) return;
+
+    // Check for Duplicates
+    const duplicate = patients.find(p => 
+      p.phone.trim() === phone.trim() || 
+      p.name.trim().toLowerCase() === name.trim().toLowerCase()
+    );
+
+    if (duplicate) {
+      alert("Bukaankan horay ayaa loo diiwaangeliyay! Fadlan hubi magaca ama lambarka taleefanka.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const newPatient: Patient = {
+        id: Date.now().toString(),
+        name: name.trim(),
+        age: parseInt(age),
+        gender: gender,
+        phone: phone.trim(),
+        lastVisit: new Date().toISOString().split('T')[0],
+        medicalHistory: [],
+        condition: condition || 'Checkup',
+        balance: 0,
+        teethStatus: {}
+      };
+      await addNewPatient(newPatient);
+      setShowAddModal(false);
+      setName(''); setAge(''); setPhone(''); setCondition(''); setGender('Male');
+    } catch (error) {
+      console.error("Error adding patient:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleAddHistory = async (e: React.FormEvent) => {
@@ -169,6 +199,22 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
     setRxQueue([]);
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 3000);
+  };
+
+  const handleToothClick = async (toothNumber: number) => {
+    if (!selectedPatient) return;
+    
+    // Toggle status or set new status
+    const currentStatus = selectedPatient.teethStatus?.[toothNumber] || 'Healthy';
+    const newStatus = toothStatusAction;
+
+    const updatedTeeth = { ...selectedPatient.teethStatus, [toothNumber]: newStatus };
+    
+    // Optimistic Update
+    setSelectedPatient({ ...selectedPatient, teethStatus: updatedTeeth });
+    
+    // Save to DB
+    await updatePat(selectedPatient.id, { teethStatus: updatedTeeth });
   };
 
   const filteredPatients = useMemo(() => {
@@ -247,7 +293,7 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
              ) : null}
 
              <div className="bg-slate-50 rounded-2xl p-4 space-y-3 mt-auto">
-                <div className="flex justify-between items-center"><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Age</span><span className="font-black text-slate-900 text-sm">{patient.age}</span></div>
+                <div className="flex justify-between items-center"><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Age / Sex</span><span className="font-black text-slate-900 text-sm">{patient.age} / {patient.gender ? patient.gender.charAt(0) : 'N/A'}</span></div>
                 <div className="flex justify-between items-center"><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Last Visit</span><span className="font-black text-slate-900 text-[10px]">{patient.lastVisit}</span></div>
              </div>
           </div>
@@ -264,7 +310,7 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
                       <span className="text-slate-400 text-xs font-bold">UID: {selectedPatient.id.slice(-6)}</span>
                    </div>
                    <h2 className="text-4xl font-black tracking-tight">{selectedPatient.name}</h2>
-                   <p className="text-slate-400 font-bold mt-1 uppercase text-xs tracking-widest">{selectedPatient.age} Years • {selectedPatient.phone}</p>
+                   <p className="text-slate-400 font-bold mt-1 uppercase text-xs tracking-widest">{selectedPatient.age} Years • {selectedPatient.gender || 'Unknown'} • {selectedPatient.phone}</p>
                  </div>
                  <div className="flex items-center gap-3 relative z-10">
                     <button 
@@ -288,6 +334,7 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
               
               <div className="flex border-b border-slate-100 bg-white p-2 gap-2 overflow-x-auto no-scrollbar shrink-0">
                  <TabButton active={detailTab === 'info'} onClick={() => setDetailTab('info')} icon={<FileText className="w-4 h-4" />} label="Overview" />
+                 <TabButton active={detailTab === 'chart'} onClick={() => setDetailTab('chart')} icon={<LayoutGrid className="w-4 h-4" />} label="Dental Chart" />
                  <TabButton active={detailTab === 'history'} onClick={() => setDetailTab('history')} icon={<ClipboardList className="w-4 h-4" />} label="Clinical History" />
                  <TabButton active={detailTab === 'prescription'} onClick={() => setDetailTab('prescription')} icon={<Pill className="w-4 h-4" />} label="Prescription" />
                  <TabButton active={detailTab === 'labs'} onClick={() => setDetailTab('labs')} icon={<Microscope className="w-4 h-4" />} label="Laboratory" />
@@ -311,6 +358,7 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
                         <div className="space-y-6">
                           <DataRow label="Chief Complaint" value={selectedPatient.condition || 'General Checkup'} />
                           <DataRow label="Recent Activity" value={selectedPatient.lastVisit} />
+                          <DataRow label="Gender" value={selectedPatient.gender || 'Not Specified'} />
                           <DataRow label="System Status" value="Healthy / Stable" />
                         </div>
                       </div>
@@ -318,6 +366,73 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
                          <Microscope className="w-20 h-20 mb-4 text-slate-300" />
                          <p className="font-bold text-slate-400 uppercase tracking-widest text-[10px]">No Imaging Uploaded</p>
                       </div>
+                    </div>
+                 )}
+
+                 {detailTab === 'chart' && (
+                    <div className="flex flex-col lg:flex-row gap-8">
+                       <div className="flex-1 bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
+                          <div className="flex justify-between items-center mb-6">
+                             <h3 className="text-xl font-black text-slate-900 tracking-tight">Odontogram (Shaxda Ilkaha)</h3>
+                             <div className="flex gap-2">
+                                <StatusLegend color="bg-white border-slate-200" label="Healthy" />
+                                <StatusLegend color="bg-rose-500" label="Decay" />
+                                <StatusLegend color="bg-blue-500" label="Filled" />
+                                <StatusLegend color="bg-slate-800" label="Missing" />
+                                <StatusLegend color="bg-amber-400" label="Crown" />
+                             </div>
+                          </div>
+                          
+                          {/* Teeth Grid */}
+                          <div className="space-y-8">
+                             {/* Upper Jaw */}
+                             <div className="flex justify-center gap-1 flex-wrap">
+                                {[18,17,16,15,14,13,12,11, 21,22,23,24,25,26,27,28].map(num => (
+                                   <Tooth 
+                                      key={num} 
+                                      number={num} 
+                                      status={selectedPatient.teethStatus?.[num] || 'Healthy'}
+                                      onClick={() => handleToothClick(num)} 
+                                   />
+                                ))}
+                             </div>
+                             
+                             <div className="h-px bg-slate-100 w-full"></div>
+
+                             {/* Lower Jaw */}
+                             <div className="flex justify-center gap-1 flex-wrap">
+                                {[48,47,46,45,44,43,42,41, 31,32,33,34,35,36,37,38].map(num => (
+                                   <Tooth 
+                                      key={num} 
+                                      number={num} 
+                                      status={selectedPatient.teethStatus?.[num] || 'Healthy'}
+                                      onClick={() => handleToothClick(num)} 
+                                   />
+                                ))}
+                             </div>
+                          </div>
+                       </div>
+
+                       <div className="w-full lg:w-72 bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 h-fit">
+                          <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Select Action Tool</h4>
+                          <div className="space-y-2">
+                             {(['Healthy', 'Decay', 'Filled', 'Missing', 'Crown', 'RootCanal'] as const).map(status => (
+                                <button
+                                   key={status}
+                                   onClick={() => setToothStatusAction(status)}
+                                   className={`w-full p-4 rounded-2xl flex items-center justify-between text-xs font-bold transition-all ${toothStatusAction === status ? 'bg-slate-900 text-white shadow-lg' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}
+                                >
+                                   <span>{status}</span>
+                                   {toothStatusAction === status && <CheckCircle2 className="w-4 h-4" />}
+                                </button>
+                             ))}
+                          </div>
+                          <div className="mt-8 p-4 bg-blue-50 rounded-2xl border border-blue-100">
+                             <p className="text-[10px] text-blue-600 font-medium leading-relaxed">
+                                Select a tool above, then click on a tooth in the chart to mark its status. Changes save automatically.
+                             </p>
+                          </div>
+                       </div>
                     </div>
                  )}
 
@@ -643,15 +758,28 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
                       <input required type="number" placeholder="Age..." value={age} onChange={e => setAge(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-black text-sm border-2 border-transparent focus:border-blue-500 transition-all" />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Phone</label>
-                      <input required placeholder="061..." value={phone} onChange={e => setPhone(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-black text-sm border-2 border-transparent focus:border-blue-500 transition-all" />
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Gender</label>
+                      <select value={gender} onChange={e => setGender(e.target.value as 'Male' | 'Female')} className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-black text-sm border-2 border-transparent focus:border-blue-500 transition-all appearance-none">
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                      </select>
                     </div>
+                 </div>
+                 <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Phone</label>
+                    <input required placeholder="061..." value={phone} onChange={e => setPhone(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-black text-sm border-2 border-transparent focus:border-blue-500 transition-all" />
                  </div>
                  <div className="space-y-1">
                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Initial Condition</label>
                    <input placeholder="Chief complaint..." value={condition} onChange={e => setCondition(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-black text-sm border-2 border-transparent focus:border-blue-500 transition-all" />
                  </div>
-                 <button type="submit" className="w-full py-5 bg-blue-600 text-white font-black rounded-2xl uppercase tracking-widest text-[10px] shadow-xl hover:bg-blue-700 transition-all mt-4">Create Patient Profile</button>
+                 <button 
+                    type="submit" 
+                    disabled={isSubmitting} 
+                    className={`w-full py-5 bg-blue-600 text-white font-black rounded-2xl uppercase tracking-widest text-[10px] shadow-xl hover:bg-blue-700 transition-all mt-4 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                 >
+                    {isSubmitting ? 'Processing...' : 'Create Patient Profile'}
+                 </button>
               </form>
            </div>
         </div>
@@ -676,5 +804,41 @@ const DataRow = ({ label, value }: { label: string; value: string }) => (
     <p className="text-lg font-black text-slate-900 tracking-tight">{value}</p>
   </div>
 );
+
+const StatusLegend = ({ color, label }: { color: string, label: string }) => (
+  <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
+     <div className={`w-2 h-2 rounded-full ${color}`}></div>
+     <span className="text-[9px] font-black uppercase text-slate-500 tracking-widest">{label}</span>
+  </div>
+);
+
+const Tooth: React.FC<{ number: number; status: string; onClick: () => void }> = ({ number, status, onClick }) => {
+   const statusColors: Record<string, string> = {
+      'Healthy': 'fill-white stroke-slate-200 hover:fill-blue-50',
+      'Decay': 'fill-rose-500 stroke-rose-600',
+      'Filled': 'fill-blue-500 stroke-blue-600',
+      'Missing': 'fill-slate-800 stroke-slate-900',
+      'Crown': 'fill-amber-400 stroke-amber-500',
+      'RootCanal': 'fill-purple-500 stroke-purple-600'
+   };
+
+   return (
+      <div 
+         onClick={onClick} 
+         className="flex flex-col items-center gap-1 cursor-pointer group hover:-translate-y-1 transition-all"
+         title={`Tooth #${number}: ${status}`}
+      >
+         <div className="w-10 h-10 md:w-12 md:h-12 relative">
+            <svg viewBox="0 0 24 24" className={`w-full h-full transition-colors drop-shadow-sm ${statusColors[status] || statusColors['Healthy']}`} strokeWidth="1.5">
+               <path d="M7 2c-2 0-3 2.5-3 5v4c0 3 2 5 2 7 0 2 1 4 2 4s2-2 2-4V9h4v9c0 2 1 4 2 4s2-2 2-4v-7c0-2.5-1-5-3-5h-4V5c0-2-1-3-2-3z" />
+            </svg>
+            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+               <div className="bg-black/50 text-white text-[8px] font-black px-1 rounded">{status[0]}</div>
+            </div>
+         </div>
+         <span className={`text-[9px] font-black ${status !== 'Healthy' ? 'text-slate-900' : 'text-slate-300'}`}>{number}</span>
+      </div>
+   );
+};
 
 export default PatientsView;

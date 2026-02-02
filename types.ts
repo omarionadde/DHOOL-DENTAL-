@@ -3,12 +3,14 @@ export interface Patient {
   id: string;
   name: string;
   age: number;
+  gender: 'Male' | 'Female';
   phone: string;
   email?: string;
   lastVisit: string;
   medicalHistory: string[];
   condition?: string;
   balance?: number;
+  teethStatus?: Record<number, 'Healthy' | 'Decay' | 'Filled' | 'Missing' | 'Crown' | 'RootCanal'>;
 }
 
 export interface PatientHistory {

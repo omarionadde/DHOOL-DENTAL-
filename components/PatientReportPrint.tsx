@@ -104,7 +104,7 @@ export const PatientReportPrint: React.FC<PatientReportPrintProps> = ({
                 </div>
                 <div>
                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Gender</p>
-                   <p className="text-xl font-black text-slate-900">M/F</p>
+                   <p className="text-xl font-black text-slate-900">{patient.gender || 'N/A'}</p>
                 </div>
                 <div className="text-right">
                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Contact</p>
