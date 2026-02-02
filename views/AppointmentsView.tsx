@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { 
-  Calendar, Clock, User, Stethoscope, CheckCircle2, XCircle, Clock3, PlusCircle, X, UserPlus, Users
+  Calendar, Clock, User, Stethoscope, CheckCircle2, XCircle, Clock3, PlusCircle, X, UserPlus, Users, Search
 } from 'lucide-react';
 import { Appointment } from '../types';
 import { useData } from '../context/DataContext';
@@ -13,6 +13,9 @@ const AppointmentsView: React.FC = () => {
   // Toggle between existing patient list or new guest
   const [isGuest, setIsGuest] = useState(false);
   const [guestName, setGuestName] = useState('');
+  
+  // Search state for existing patients
+  const [searchTerm, setSearchTerm] = useState('');
 
   const [formData, setFormData] = useState({
     patientId: '',
@@ -70,7 +73,14 @@ const AppointmentsView: React.FC = () => {
     });
     setGuestName('');
     setIsGuest(false);
+    setSearchTerm('');
   };
+
+  // Filter patients based on search
+  const filteredPatients = patients.filter(p => 
+    p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    p.phone.includes(searchTerm)
+  );
 
   return (
     <div className="space-y-6">
@@ -154,7 +164,7 @@ const AppointmentsView: React.FC = () => {
 
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                    {isGuest ? "Guest Name" : "Select Registered Patient"}
+                    {isGuest ? "Guest Name" : "Find Patient"}
                 </label>
                 
                 {isGuest ? (
@@ -167,15 +177,38 @@ const AppointmentsView: React.FC = () => {
                         placeholder="Enter full name..." 
                     />
                 ) : (
-                    <select 
-                        required 
-                        value={formData.patientId} 
-                        onChange={e => setFormData({...formData, patientId: e.target.value})} 
-                        className="w-full px-5 py-4 bg-slate-50 rounded-2xl outline-none font-bold text-sm border-2 border-transparent focus:border-blue-500 transition-all appearance-none"
-                    >
-                        <option value="">-- Choose Patient --</option>
-                        {patients.map(p => <option key={p.id} value={p.id}>{p.name} - {p.phone}</option>)}
-                    </select>
+                    <div className="space-y-2">
+                        {/* Search Input */}
+                        <div className="relative">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                            <input 
+                                type="text"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full pl-10 pr-4 py-3 bg-slate-50 rounded-2xl outline-none font-bold text-xs border border-transparent focus:border-blue-500 transition-all"
+                                placeholder="Search by phone or name..."
+                                autoFocus
+                            />
+                        </div>
+                        
+                        {/* Filtered Dropdown */}
+                        <select 
+                            required 
+                            size={filteredPatients.length > 0 && searchTerm ? 4 : 1} 
+                            value={formData.patientId} 
+                            onChange={e => setFormData({...formData, patientId: e.target.value})} 
+                            className={`w-full px-5 py-4 bg-slate-50 rounded-2xl outline-none font-bold text-sm border-2 border-transparent focus:border-blue-500 transition-all ${filteredPatients.length > 0 && searchTerm ? 'h-auto' : ''}`}
+                        >
+                            <option value="">
+                                {searchTerm 
+                                    ? (filteredPatients.length > 0 ? "-- Select Patient Below --" : "No results found") 
+                                    : "-- Choose from List --"}
+                            </option>
+                            {filteredPatients.map(p => (
+                                <option key={p.id} value={p.id}>{p.name} - {p.phone}</option>
+                            ))}
+                        </select>
+                    </div>
                 )}
               </div>
 
