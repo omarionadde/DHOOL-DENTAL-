@@ -4,7 +4,7 @@ import { HashRouter as Router, Routes, Route, Link, useLocation, useNavigate } f
 import { 
   LayoutDashboard, Users, Calendar, Menu, ChevronDown, ChevronRight,
   Receipt, Wallet, BarChart3, ShoppingCart, 
-  Settings as SettingsIcon, LogOut, Shield, Stethoscope, Briefcase, Truck, ClipboardList
+  Settings as SettingsIcon, LogOut, Shield, Stethoscope, Briefcase, Truck, ClipboardList, Clock
 } from 'lucide-react';
 import { StaffUser, ViewType } from './types';
 import DashboardView from './views/DashboardView';
@@ -23,6 +23,7 @@ import ClinicalServicesView from './views/ClinicalServicesView';
 import SettingsView from './views/SettingsView';
 import LoginView from './views/LoginView';
 import AIAssistantView from './views/AIAssistantView';
+import QueueView from './views/QueueView';
 import { firebaseService } from './services/firebaseService';
 import { DataProvider, useData } from './context/DataContext';
 import { DhoolLogo } from './components/DhoolLogo';
@@ -107,6 +108,7 @@ const AppContent: React.FC = () => {
         settings: 'Settings',
         admin: 'User-ada',
         logout: 'Ka Bax',
+        queue: 'Qolka Sugitaanka'
       },
       en: {
         dashboard: 'Dashboard',
@@ -128,6 +130,7 @@ const AppContent: React.FC = () => {
         settings: 'Settings',
         admin: 'Users',
         logout: 'Logout',
+        queue: 'Waiting Queue'
       }
     };
     return dict[language]?.[key] || key;
@@ -138,7 +141,7 @@ const AppContent: React.FC = () => {
     if (currentUser.role === 'Admin') return true;
     switch(view) {
       case 'dashboard': return true;
-      case 'patients': case 'appointments': case 'services': return (['Doctor', 'Staff', 'Admin'] as string[]).includes(currentUser.role);
+      case 'patients': case 'appointments': case 'services': case 'queue': return (['Doctor', 'Staff', 'Admin'] as string[]).includes(currentUser.role);
       case 'pos': case 'pharmacy': case 'suppliers': return (['Staff', 'Admin'] as string[]).includes(currentUser.role);
       case 'invoices': case 'expenses': case 'salaries': case 'reports': case 'treasury': return (['Accountant', 'Admin'] as string[]).includes(currentUser.role);
       case 'users': return false;
@@ -160,6 +163,7 @@ const AppContent: React.FC = () => {
 
         <nav className="flex-1 px-3">
           <NavItem to="/" label={t('dashboard')} active={location.pathname === '/'} icon={LayoutDashboard} isSidebarOpen={isSidebarOpen} />
+          {canAccess('queue') && <NavItem to="/queue" label={t('queue')} active={location.pathname === '/queue'} icon={Clock} isSidebarOpen={isSidebarOpen} />}
           
           <div className="h-4"></div>
 
@@ -231,6 +235,7 @@ const AppContent: React.FC = () => {
         <section className="flex-1 overflow-y-auto p-8 bg-[#f8fafc]">
           <Routes>
              <Route path="/" element={<DashboardView />} />
+             <Route path="/queue" element={<QueueView />} />
              <Route path="/pos" element={<POSView mode="pos" currency={currency} t={t} />} />
              <Route path="/services" element={<POSView mode="services" currency={currency} t={t} />} />
              <Route path="/clinical-management" element={<ClinicalServicesView />} />

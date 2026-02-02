@@ -58,6 +58,7 @@ interface DataContextType {
 
   // Appointments
   addNewAppointment: (a: Appointment) => Promise<void>;
+  updateAppointmentStatus: (id: string, status: 'Scheduled' | 'In Progress' | 'Completed' | 'Cancelled') => Promise<void>;
   
   // Finance
   addExpense: (e: Expense) => Promise<void>;
@@ -396,6 +397,32 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await logAction('CREATE', 'APPOINTMENT', `Scheduled visit for ${a.patientName} at ${a.time}`);
   };
 
+  const updateAppointmentStatus = async (id: string, status: 'Scheduled' | 'In Progress' | 'Completed' | 'Cancelled') => {
+    setAppointments(prev => {
+      const updated = prev.map(a => a.id === id ? { ...a, status } : a);
+      secureStorage.setItem(LOCAL_KEYS.APPOINTMENTS, updated);
+      return updated;
+    });
+    // Assuming firebaseService has generic update support or dedicated one. Since updateAppointment isn't explicit in services, 
+    // we use `insertAppointment` to overwrite if using setDoc, but ideally `updateDoc`.
+    // Let's add a quick direct firebase update call here or assume service handles it.
+    // Actually, looking at firebaseService, `insertAppointment` uses `setDoc` which overwrites.
+    // However, to be cleaner, we should have an update method. For now, since `insertAppointment` uses setDoc with ID, 
+    // passing the full object works, but inefficient.
+    // Best practice: add `updateAppointment` to firebaseService.
+    // For this implementation context, I will just call insertAppointment with the updated object derived from state.
+    
+    // Finding the updated object from the state change we just made? No, state update is async.
+    // Let's manually reconstruct:
+    const currentApt = appointments.find(a => a.id === id);
+    if(currentApt) {
+        const updatedApt = { ...currentApt, status };
+        await firebaseService.insertAppointment(updatedApt); // Overwrite
+    }
+    
+    await logAction('UPDATE', 'QUEUE', `Moved appointment ${id} to ${status}`);
+  };
+
   const addExpense = async (e: Expense) => {
     setExpenses(prev => {
       const updated = [e, ...prev];
@@ -457,7 +484,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <DataContext.Provider value={{
       patients, inventory, clinicalServices, appointments, invoices, expenses, salaries, users, patientHistory, prescriptions, suppliers, labResults, activityLogs,
       refreshData, addNewPatient, updatePat, deletePat, processPatientPayment, addNewHistory, addNewPrescription, removePrescription, addNewLabResult, addNewMedicine, updateMed, deleteMed, 
-      addNewService, removeService, addNewSupplier, updateSupplier, addTransaction, updateInvoiceStatus, addNewAppointment, addExpense, addSalary,
+      addNewService, removeService, addNewSupplier, updateSupplier, addTransaction, updateInvoiceStatus, addNewAppointment, updateAppointmentStatus, addExpense, addSalary,
       addNewUser, removeUser, updateUserProfile, isLoading, isOnline
     }}>
       {children}

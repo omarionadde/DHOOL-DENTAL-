@@ -11,6 +11,13 @@ export interface Patient {
   condition?: string;
   balance?: number;
   teethStatus?: Record<number, 'Healthy' | 'Decay' | 'Filled' | 'Missing' | 'Crown' | 'RootCanal'>;
+  images?: {
+    id: string;
+    url: string;
+    date: string;
+    note: string;
+    type: 'X-Ray' | 'Photo' | 'Document';
+  }[];
 }
 
 export interface PatientHistory {
@@ -53,7 +60,7 @@ export interface Appointment {
   doctor: string;
   date: string;
   time: string;
-  status: 'Scheduled' | 'Completed' | 'Cancelled';
+  status: 'Scheduled' | 'In Progress' | 'Completed' | 'Cancelled';
   reason: string;
 }
 
@@ -148,6 +155,7 @@ export type ViewType =
   | 'dashboard' 
   | 'patients' 
   | 'appointments' 
+  | 'queue'
   | 'pharmacy' 
   | 'pos'
   | 'services'

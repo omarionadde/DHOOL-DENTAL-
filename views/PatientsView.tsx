@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { Patient, PatientHistory, Prescription, StaffUser, LabResult } from '../types';
-import { Trash2, Printer, Plus, FileText, Pill, X, Save, Clock, ClipboardList, User, Microscope, Sparkles, AlertCircle, ChevronRight, CheckCircle2, FileDown, Wallet, CreditCard, DollarSign, LayoutGrid } from 'lucide-react';
+import { Trash2, Printer, Plus, FileText, Pill, X, Save, Clock, ClipboardList, User, Microscope, Sparkles, AlertCircle, ChevronRight, CheckCircle2, FileDown, Wallet, CreditCard, DollarSign, LayoutGrid, Image as ImageIcon, Upload, Eye } from 'lucide-react';
 import { getAIAssistance } from '../services/geminiService';
 import { PrescriptionPrint } from '../components/PrescriptionPrint';
 import { PatientReportPrint } from '../components/PatientReportPrint';
@@ -26,6 +26,7 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [printingRx, setPrintingRx] = useState<Prescription | null>(null);
   const [showReportPrint, setShowReportPrint] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   
   // Registration State
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -52,6 +53,10 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
   const [testResult, setTestResult] = useState('');
   const [testStatus, setTestStatus] = useState<'Normal'|'Abnormal'|'Critical'>('Normal');
 
+  // Image Upload Form
+  const [imageNote, setImageNote] = useState('');
+  const [imageType, setImageType] = useState<'X-Ray' | 'Photo' | 'Document'>('X-Ray');
+
   // Prescription Form State
   const [rxQueue, setRxQueue] = useState<{name: string; dosage: string; frequency: string; duration: string}[]>([]);
   const [rxForm, setRxForm] = useState({ name: '', dosage: '', frequency: '', duration: '' });
@@ -61,7 +66,7 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
   const [selectedTooth, setSelectedTooth] = useState<number | null>(null);
   const [toothStatusAction, setToothStatusAction] = useState<'Healthy' | 'Decay' | 'Filled' | 'Missing' | 'Crown' | 'RootCanal'>('Healthy');
 
-  const [detailTab, setDetailTab] = useState<'info' | 'chart' | 'history' | 'prescription' | 'labs' | 'financial'>('info');
+  const [detailTab, setDetailTab] = useState<'info' | 'chart' | 'history' | 'prescription' | 'labs' | 'imaging' | 'financial'>('info');
 
   const handleGetAiSummary = async () => {
     if (!selectedPatient) return;
@@ -75,6 +80,37 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
     const summary = await getAIAssistance(prompt, "You are a clinical analytical tool.");
     setAiSummary(summary);
     setIsAiLoading(false);
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && selectedPatient) {
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+            const base64String = reader.result as string;
+            const newImage = {
+                id: Date.now().toString(),
+                url: base64String,
+                date: new Date().toISOString().split('T')[0],
+                note: imageNote || 'No notes',
+                type: imageType
+            };
+            const updatedImages = [newImage, ...(selectedPatient.images || [])];
+            
+            await updatePat(selectedPatient.id, { images: updatedImages });
+            setSelectedPatient({...selectedPatient, images: updatedImages});
+            setImageNote('');
+        };
+        reader.readAsDataURL(file);
+    }
+  };
+
+  const handleDeleteImage = async (imageId: string) => {
+      if(!selectedPatient) return;
+      if(!confirm('Are you sure you want to delete this image?')) return;
+      const updatedImages = (selectedPatient.images || []).filter(img => img.id !== imageId);
+      await updatePat(selectedPatient.id, { images: updatedImages });
+      setSelectedPatient({...selectedPatient, images: updatedImages});
   };
 
   const handleAddLab = async (e: React.FormEvent) => {
@@ -120,7 +156,8 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
         medicalHistory: [],
         condition: condition || 'Checkup',
         balance: 0,
-        teethStatus: {}
+        teethStatus: {},
+        images: []
       };
       await addNewPatient(newPatient);
       setShowAddModal(false);
@@ -246,6 +283,14 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
         />
       )}
 
+      {/* Image Preview Modal */}
+      {selectedImage && (
+          <div className="fixed inset-0 bg-black/90 z-[150] flex items-center justify-center p-4 cursor-zoom-out" onClick={() => setSelectedImage(null)}>
+              <img src={selectedImage} className="max-w-full max-h-full rounded-lg shadow-2xl" />
+              <button className="absolute top-4 right-4 p-4 text-white"><X className="w-8 h-8" /></button>
+          </div>
+      )}
+
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
         <div>
           <h2 className="text-3xl font-black text-slate-900 tracking-tight">{t('patients')}</h2>
@@ -335,6 +380,7 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
               <div className="flex border-b border-slate-100 bg-white p-2 gap-2 overflow-x-auto no-scrollbar shrink-0">
                  <TabButton active={detailTab === 'info'} onClick={() => setDetailTab('info')} icon={<FileText className="w-4 h-4" />} label="Overview" />
                  <TabButton active={detailTab === 'chart'} onClick={() => setDetailTab('chart')} icon={<LayoutGrid className="w-4 h-4" />} label="Dental Chart" />
+                 <TabButton active={detailTab === 'imaging'} onClick={() => setDetailTab('imaging')} icon={<ImageIcon className="w-4 h-4" />} label="X-Ray & Imaging" />
                  <TabButton active={detailTab === 'history'} onClick={() => setDetailTab('history')} icon={<ClipboardList className="w-4 h-4" />} label="Clinical History" />
                  <TabButton active={detailTab === 'prescription'} onClick={() => setDetailTab('prescription')} icon={<Pill className="w-4 h-4" />} label="Prescription" />
                  <TabButton active={detailTab === 'labs'} onClick={() => setDetailTab('labs')} icon={<Microscope className="w-4 h-4" />} label="Laboratory" />
@@ -362,11 +408,79 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
                           <DataRow label="System Status" value="Healthy / Stable" />
                         </div>
                       </div>
-                      <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col items-center justify-center opacity-40">
-                         <Microscope className="w-20 h-20 mb-4 text-slate-300" />
-                         <p className="font-bold text-slate-400 uppercase tracking-widest text-[10px]">No Imaging Uploaded</p>
+                      <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col items-center justify-center">
+                         {selectedPatient.images && selectedPatient.images.length > 0 ? (
+                             <div className="w-full h-full flex flex-col items-center justify-center">
+                                 <img src={selectedPatient.images[0].url} className="w-32 h-32 object-cover rounded-xl mb-4 border border-slate-200" />
+                                 <p className="font-bold text-slate-500 uppercase text-[10px] tracking-widest">Latest Imaging Available</p>
+                                 <button onClick={() => setDetailTab('imaging')} className="mt-2 text-blue-600 text-xs font-black hover:underline">View Gallery</button>
+                             </div>
+                         ) : (
+                             <div className="opacity-40 flex flex-col items-center">
+                                <Microscope className="w-20 h-20 mb-4 text-slate-300" />
+                                <p className="font-bold text-slate-400 uppercase tracking-widest text-[10px]">No Imaging Uploaded</p>
+                             </div>
+                         )}
                       </div>
                     </div>
+                 )}
+
+                 {detailTab === 'imaging' && (
+                     <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+                         <div className="lg:col-span-1">
+                             <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 sticky top-0">
+                                 <h3 className="text-xl font-black text-slate-900 mb-6 tracking-tight">Upload Media</h3>
+                                 <div className="space-y-4">
+                                     <div className="relative group cursor-pointer border-2 border-dashed border-slate-200 rounded-[2rem] p-8 hover:bg-slate-50 transition-all flex flex-col items-center text-center">
+                                         <input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
+                                         <Upload className="w-8 h-8 text-blue-500 mb-2" />
+                                         <p className="text-xs font-bold text-slate-500">Click to upload X-Ray or Photo</p>
+                                     </div>
+                                     <div className="space-y-1">
+                                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">File Category</label>
+                                         <select value={imageType} onChange={e => setImageType(e.target.value as any)} className="w-full px-4 py-3 bg-slate-50 rounded-2xl outline-none font-bold text-xs border border-transparent focus:border-blue-500">
+                                             <option>X-Ray</option>
+                                             <option>Photo</option>
+                                             <option>Document</option>
+                                         </select>
+                                     </div>
+                                     <div className="space-y-1">
+                                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Notes</label>
+                                         <textarea value={imageNote} onChange={e => setImageNote(e.target.value)} className="w-full px-4 py-3 bg-slate-50 rounded-2xl outline-none font-bold text-xs h-20 border border-transparent focus:border-blue-500" placeholder="Optional descriptions..." />
+                                     </div>
+                                 </div>
+                             </div>
+                         </div>
+                         <div className="lg:col-span-3">
+                             <h3 className="text-xl font-black text-slate-900 mb-6 tracking-tight flex items-center gap-3"><ImageIcon className="w-5 h-5 text-slate-400" /> Patient Gallery</h3>
+                             {!selectedPatient.images || selectedPatient.images.length === 0 ? (
+                                 <div className="py-20 text-center bg-white rounded-[2.5rem] border border-dashed border-slate-200">
+                                     <p className="text-slate-400 font-bold text-sm">No medical images on record.</p>
+                                 </div>
+                             ) : (
+                                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                     {selectedPatient.images.map((img, idx) => (
+                                         <div key={idx} className="bg-white p-3 rounded-3xl border border-slate-100 shadow-sm group relative">
+                                             <div className="aspect-square rounded-2xl overflow-hidden mb-3 relative">
+                                                 <img src={img.url} className="w-full h-full object-cover" />
+                                                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                                     <button onClick={() => setSelectedImage(img.url)} className="p-2 bg-white/20 hover:bg-white/40 rounded-xl text-white backdrop-blur-sm"><Eye className="w-5 h-5" /></button>
+                                                     <button onClick={() => handleDeleteImage(img.id)} className="p-2 bg-white/20 hover:bg-rose-500/80 rounded-xl text-white backdrop-blur-sm"><Trash2 className="w-5 h-5" /></button>
+                                                 </div>
+                                             </div>
+                                             <div>
+                                                 <div className="flex justify-between items-center mb-1">
+                                                     <span className="text-[10px] font-black uppercase tracking-widest text-blue-600 bg-blue-50 px-2 py-0.5 rounded-lg">{img.type}</span>
+                                                     <span className="text-[9px] font-bold text-slate-400">{img.date}</span>
+                                                 </div>
+                                                 <p className="text-xs font-bold text-slate-600 truncate">{img.note}</p>
+                                             </div>
+                                         </div>
+                                     ))}
+                                 </div>
+                             )}
+                         </div>
+                     </div>
                  )}
 
                  {detailTab === 'chart' && (
