@@ -2,7 +2,7 @@
 import { db, auth } from '../lib/firebase';
 import { 
   collection, getDocs, updateDoc, deleteDoc, doc, 
-  query, orderBy, setDoc, getDoc, limit, where 
+  query, orderBy, setDoc, getDoc, limit, where, onSnapshot 
 } from "firebase/firestore";
 import { signInWithEmailAndPassword, signOut, updatePassword, createUserWithEmailAndPassword } from "firebase/auth";
 import { Patient, Medicine, Appointment, Invoice, PatientHistory, StaffUser, ClinicalService, Expense, Salary, Prescription, Supplier, LabResult, ActivityLog } from '../types';
@@ -27,7 +27,6 @@ const KEYS = {
 let isDbOffline = false;
 
 const handleOfflineLogin = (email: string, password: string) => {
-    // console.warn("Checking Offline Login");
     const localUsers: StaffUser[] = secureStorage.getItem(KEYS.USERS) || [];
     const normalizedEmail = email.toLowerCase().trim();
     
@@ -41,7 +40,6 @@ const handleOfflineLogin = (email: string, password: string) => {
             status: 'Active',
             avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=DhoolAdmin`
         };
-        // Ensure admin exists in local storage
         if (!localUsers.find(u => u.email === defaultAdmin.email)) {
             secureStorage.setItem(KEYS.USERS, [...localUsers, defaultAdmin]);
         }
@@ -77,6 +75,7 @@ const handleLocalFallback = (localKey: string, action: string, payload: any) => 
     }
 };
 
+// Request Handler for single actions
 const handleRequest = async <T>(
   operation: () => Promise<T>,
   localKey: string,
@@ -87,6 +86,7 @@ const handleRequest = async <T>(
 
   try {
     const data = await operation();
+    // Update local storage for cache
     try {
         const currentLocal = secureStorage.getItem(localKey) || [];
         if (action === 'get' && Array.isArray(data)) {
@@ -108,7 +108,6 @@ const handleRequest = async <T>(
   } catch (error: any) {
     console.error(`Firebase Error [${action}]:`, error);
     if (error.code === 'unavailable' || error.code === 'permission-denied') {
-        // console.warn("Switching to offline mode due to permission/availability error.");
         isDbOffline = true;
     }
     return handleLocalFallback(localKey, action, payload);
@@ -120,21 +119,16 @@ export const firebaseService = {
     if (!password) return null;
     const normalizedEmail = email.toLowerCase().trim();
 
-    // 1. Local Fallback Priority for Hardcoded Admin (Always allow system owner)
     if (normalizedEmail === 'admin@dhool.com' && password === 'admin123') {
        return handleOfflineLogin(normalizedEmail, password);
     }
 
-    // 2. If Offline Mode is explicitly active, skip network
     if (isDbOffline) return handleOfflineLogin(normalizedEmail, password);
 
     try {
-      // 3. Try standard Firebase Login
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const uid = userCredential.user.uid;
 
-      // 4. Verify user exists in our Admin-managed database
-      // This is crucial: Even if they have a Google Auth account, they must be in our 'users' collection
       let userDoc = await getDoc(doc(db, "users", uid));
       
       if (userDoc.exists()) {
@@ -143,21 +137,16 @@ export const firebaseService = {
         return userData;
       } 
       
-      // If not found by UID, check by Email (legacy or pre-registered users)
       const q = query(collection(db, "users"), where("email", "==", normalizedEmail));
       const querySnapshot = await getDocs(q);
       
       if (!querySnapshot.empty) {
          const userData = querySnapshot.docs[0].data() as StaffUser;
-         // Sync UID? For now just let them in.
          handleLocalFallback(KEYS.USERS, 'insert', userData);
          return userData;
       }
 
-      // If we reach here, the user authenticated with Firebase but has NO record in our system.
-      // DENY ACCESS unless it is the fallback admin email.
       if (normalizedEmail === 'admin@dhool.com') {
-         // Auto-restore admin
          const adminProfile: StaffUser = {
             id: uid,
             email: normalizedEmail,
@@ -169,67 +158,77 @@ export const firebaseService = {
          await setDoc(doc(db, "users", uid), adminProfile);
          return adminProfile;
       }
-
-      console.error("Access Denied: User not found in Staff Registry.");
       return null;
 
     } catch (error: any) {
-      // 5. Handle Login Failures
-      
-      // If Network Error, try local
       if (error.code === 'auth/network-request-failed') {
           isDbOffline = true;
           return handleOfflineLogin(normalizedEmail, password);
       }
-
-      // If User Not Found or Invalid Credential in Firebase Auth
-      // Check if the Admin has created them in Firestore (Pre-registration)
       if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') {
-          
           try {
-             // Search Firestore for this email
              const q = query(collection(db, "users"), where("email", "==", normalizedEmail));
              const snapshot = await getDocs(q);
-             
              if (!snapshot.empty) {
                  const userData = snapshot.docs[0].data() as StaffUser;
-                 
-                 // Verify password matches the one stored by Admin
-                 // Note: In production, hashing should be used.
                  if (userData.password && userData.password === password) {
-                     // Credentials match DB! 
-                     // Try to register them in Firebase Auth for next time
-                     try {
-                        await createUserWithEmailAndPassword(auth, email, password);
-                     } catch(e) { /* Ignore registration errors (e.g. if auth disabled), just let them in locally */ }
-                     
+                     try { await createUserWithEmailAndPassword(auth, email, password); } catch(e) {}
                      handleLocalFallback(KEYS.USERS, 'insert', userData);
                      return userData;
                  }
              }
-          } catch (dbError) {
-             console.error("DB Check failed:", dbError);
-          }
-
-          // Finally, check local storage (Offline Users created by Admin)
+          } catch (dbError) {}
           const localUser = handleOfflineLogin(normalizedEmail, password);
           if (localUser) return localUser;
       }
-      
       return null;
     }
   },
 
   logout: async () => { try { await signOut(auth); } catch(e) {} },
 
-  getLogs: () => handleRequest(() => getDocs(query(collection(db, "activity_logs"), orderBy("timestamp", "desc"), limit(100))).then(s => s.docs.map(d => ({ ...d.data(), id: d.id })) as ActivityLog[]), KEYS.LOGS, 'get'),
-  insertLog: (log: ActivityLog) => handleRequest(() => setDoc(doc(db, "activity_logs", log.id), log).then(() => log), KEYS.LOGS, 'insert', log),
+  // --- Real-time Subscriptions ---
+  
+  // Generic subscriber that listens to a collection and returns an unsubscribe function
+  subscribe: (
+    collectionName: string, 
+    callback: (data: any[]) => void, 
+    orderByField: string = 'id', 
+    orderDirection: 'asc' | 'desc' = 'asc',
+    limitCount?: number
+  ) => {
+    if (isDbOffline) return () => {}; // No-op if offline
 
+    try {
+        let q = query(collection(db, collectionName), orderBy(orderByField, orderDirection));
+        if (limitCount) {
+            q = query(collection(db, collectionName), orderBy(orderByField, orderDirection), limit(limitCount));
+        }
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+            callback(data);
+        }, (error) => {
+            console.error(`Real-time error for ${collectionName}:`, error);
+        });
+
+        return unsubscribe;
+    } catch (error) {
+        console.error(`Failed to subscribe to ${collectionName}:`, error);
+        return () => {};
+    }
+  },
+
+  // One-time Actions (Create/Update/Delete still need explicit calls)
+  
+  insertLog: (log: ActivityLog) => handleRequest(() => setDoc(doc(db, "activity_logs", log.id), log).then(() => log), KEYS.LOGS, 'insert', log),
+  
   getUsers: () => handleRequest(() => getDocs(query(collection(db, "users"), orderBy("name"))).then(s => s.docs.map(d => ({ ...d.data(), id: d.id })) as StaffUser[]), KEYS.USERS, 'get'),
   insertUser: (user: StaffUser) => handleRequest(() => setDoc(doc(db, "users", user.id), user).then(() => user), KEYS.USERS, 'insert', user),
   updateUser: (id: string, updates: Partial<StaffUser>) => handleRequest(() => updateDoc(doc(db, "users", id), updates).then(() => updates), KEYS.USERS, 'update', { id, updates }),
   deleteUser: (id: string) => handleRequest(() => deleteDoc(doc(db, "users", id)), KEYS.USERS, 'delete', id),
 
+  // Fallback Getters (used if real-time fails or for initial load check)
   getPatients: () => handleRequest(() => getDocs(query(collection(db, "patients"), orderBy("name"))).then(s => s.docs.map(d => ({ ...d.data(), id: d.id })) as Patient[]), KEYS.PATIENTS, 'get'),
   insertPatient: (p: Patient) => handleRequest(() => setDoc(doc(db, "patients", p.id), p).then(() => p), KEYS.PATIENTS, 'insert', p),
   updatePatient: (id: string, updates: Partial<Patient>) => handleRequest(() => updateDoc(doc(db, "patients", id), updates).then(() => updates), KEYS.PATIENTS, 'update', { id, updates }),
@@ -281,7 +280,9 @@ export const firebaseService = {
   insertPrescription: (rx: Prescription) => handleRequest(() => setDoc(doc(db, "prescriptions", rx.id), rx).then(() => rx), KEYS.PRESCRIPTIONS, 'insert', rx),
   deletePrescription: (id: string) => handleRequest(() => deleteDoc(doc(db, "prescriptions", id)), KEYS.PRESCRIPTIONS, 'delete', id),
   
-  insertHistory: (h: PatientHistory) => handleRequest(() => setDoc(doc(db, "patient_history", h.id), h).then(() => h), KEYS.HISTORY, 'insert', h)
+  insertHistory: (h: PatientHistory) => handleRequest(() => setDoc(doc(db, "patient_history", h.id), h).then(() => h), KEYS.HISTORY, 'insert', h),
+  
+  getLogs: () => handleRequest(() => getDocs(query(collection(db, "activity_logs"), orderBy("timestamp", "desc"), limit(100))).then(s => s.docs.map(d => ({ ...d.data(), id: d.id })) as ActivityLog[]), KEYS.LOGS, 'get'),
 };
 
 const handleLocalTransaction = (invoice: Invoice, itemsToDeduct?: { id: string; quantity: number, currentStock: number }[]) => {
