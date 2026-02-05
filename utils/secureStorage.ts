@@ -5,15 +5,42 @@ const SECRET = "DHOOL_CLINIC_SECURE_2025_KEY_X9_CLINICAL_SYSTEM";
 export const secureStorage = {
   setItem: (key: string, data: any) => {
     try {
-      const stringData = JSON.stringify(data);
+      // Use a safe replacer to handle circular references if any
+      const cache = new Set();
+      const safeStringify = (key: string, value: any) => {
+        if (typeof value === 'object' && value !== null) {
+          if (cache.has(value)) {
+            // Circular reference found, discard key
+            return;
+          }
+          cache.add(value);
+        }
+        return value;
+      };
+
+      const stringData = JSON.stringify(data, safeStringify);
+      
       // XOR Cipher + Base64 Encoding
       const encrypted = btoa(stringData.split('').map((c, i) => 
         String.fromCharCode(c.charCodeAt(0) ^ SECRET.charCodeAt(i % SECRET.length))
       ).join(''));
       localStorage.setItem(key, encrypted);
     } catch (e) {
-      console.warn("Encryption failed, falling back to plain text", e);
-      localStorage.setItem(key, JSON.stringify(data));
+      console.warn("Storage Encryption failed", e);
+      try {
+        // Fallback to plain text, but still safe stringify
+        const cache = new Set();
+        const safeStringify = (key: string, value: any) => {
+            if (typeof value === 'object' && value !== null) {
+              if (cache.has(value)) return;
+              cache.add(value);
+            }
+            return value;
+        };
+        localStorage.setItem(key, JSON.stringify(data, safeStringify));
+      } catch (e2) {
+          console.error("Critical Storage Error: Could not save data", e2);
+      }
     }
   },
 

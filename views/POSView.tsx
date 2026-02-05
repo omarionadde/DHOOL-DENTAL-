@@ -138,7 +138,7 @@ const POSView: React.FC<Props> = ({ currency, t, mode = 'pos' }) => {
   const filteredItems = items.filter(i => i.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
   return (
-    <div className="h-[calc(100vh-10rem)] flex flex-col lg:flex-row gap-6 animate-in fade-in duration-500">
+    <div className="flex flex-col lg:flex-row gap-6 animate-in fade-in duration-500 lg:h-[calc(100vh-10rem)]">
       {showReceipt && lastTransaction && (
         lastTransaction.type === 'Pharmacy' 
         ? <InvoiceReceipt 
@@ -164,7 +164,7 @@ const POSView: React.FC<Props> = ({ currency, t, mode = 'pos' }) => {
       )}
 
       {/* Catalog Area */}
-      <div className="flex-1 bg-white rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col overflow-hidden">
+      <div className="flex-1 bg-white rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col lg:overflow-hidden min-h-[500px]">
         <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex bg-slate-100 p-1.5 rounded-2xl">
             <button onClick={() => { setActiveTab('inventory'); setCart([]); }} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${activeTab === 'inventory' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
@@ -180,7 +180,7 @@ const POSView: React.FC<Props> = ({ currency, t, mode = 'pos' }) => {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 no-scrollbar">
+        <div className="flex-1 lg:overflow-y-auto p-6 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 no-scrollbar">
           {filteredItems.map(item => (
             <button key={item.id} onClick={() => addToCart(item)} className="bg-slate-50 p-4 rounded-3xl border border-transparent hover:border-blue-500 hover:bg-white transition-all text-left flex flex-col h-full group">
                <div className="aspect-square bg-white rounded-2xl mb-4 border border-slate-100 overflow-hidden flex items-center justify-center">
@@ -204,7 +204,7 @@ const POSView: React.FC<Props> = ({ currency, t, mode = 'pos' }) => {
       </div>
 
       {/* Cart Area */}
-      <div className="w-full lg:w-96 bg-slate-900 rounded-[2.5rem] flex flex-col overflow-hidden shadow-2xl">
+      <div className="w-full lg:w-96 bg-slate-900 rounded-[2.5rem] flex flex-col lg:overflow-hidden shadow-2xl h-fit lg:h-auto">
         <div className="p-8 flex justify-between items-center">
           <div>
             <h3 className="text-white font-black text-xl tracking-tight">Checkout</h3>
@@ -218,7 +218,7 @@ const POSView: React.FC<Props> = ({ currency, t, mode = 'pos' }) => {
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-8 space-y-4 no-scrollbar">
+        <div className="lg:flex-1 lg:overflow-y-auto px-8 space-y-4 no-scrollbar py-4 max-h-[400px] lg:max-h-none overflow-y-auto">
           {cart.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center opacity-20 py-12">
                <ShoppingBag className="w-16 h-16 text-white mb-4" />
