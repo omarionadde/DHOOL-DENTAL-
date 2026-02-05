@@ -6,6 +6,7 @@ import { DhoolLogo } from './DhoolLogo';
 interface InvoiceProps {
   items: CartItem[];
   total: number;
+  vat?: number;
   paidAmount?: number;
   balance?: number;
   date: string;
@@ -21,6 +22,7 @@ declare const html2pdf: any;
 export const InvoiceReceipt: React.FC<InvoiceProps> = ({ 
   items, 
   total = 0, 
+  vat = 0,
   paidAmount = 0, 
   balance = 0, 
   date, 
@@ -119,7 +121,15 @@ export const InvoiceReceipt: React.FC<InvoiceProps> = ({
           </div>
 
           <div className="space-y-1 border-b border-dashed border-gray-300 pb-3 mb-4">
-            <div className="flex justify-between items-center text-sm font-black pt-1">
+             <div className="flex justify-between opacity-70">
+                <span>Subtotal (Net)</span>
+                <span>${(total - (vat || 0)).toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between opacity-70">
+                <span>VAT (5%)</span>
+                <span>${(vat || 0).toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between items-center text-sm font-black pt-1 border-t border-dashed border-gray-100 mt-1">
               <span>GRAND TOTAL</span>
               <span>${(Number(total) || 0).toFixed(2)}</span>
             </div>

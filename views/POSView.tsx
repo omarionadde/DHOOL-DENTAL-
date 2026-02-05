@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { ShoppingBag, Trash2, Package, DollarSign, Wallet, Stethoscope, Store, RotateCcw, Plus, Search, Image as ImageIcon, Tag, Percent } from 'lucide-react';
+import { ShoppingBag, Trash2, Package, DollarSign, Wallet, Stethoscope, Store, RotateCcw, Plus, Search, Image as ImageIcon, Tag, Percent, ReceiptText, CheckCircle2 } from 'lucide-react';
 import { CartItem, ClinicalService, Product, Invoice } from '../types';
 import { InvoiceReceipt } from '../components/InvoiceReceipt';
 import { Invoice as InvoiceComponent } from '../components/Invoice';
@@ -20,6 +20,7 @@ const POSView: React.FC<Props> = ({ currency, t, mode = 'pos' }) => {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [discount, setDiscount] = useState<number>(0);
   const [discountType, setDiscountType] = useState<'percent' | 'flat'>('percent');
+  const [isVatEnabled, setIsVatEnabled] = useState(true); // New state for VAT toggle
   const [showReceipt, setShowReceipt] = useState(false);
   const [lastTransaction, setLastTransaction] = useState<any>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -56,6 +57,19 @@ const POSView: React.FC<Props> = ({ currency, t, mode = 'pos' }) => {
     }
   };
 
+  const removeFromCart = (id: string) => setCart(cart.filter(i => i.id !== id));
+  
+  const updateQuantity = (id: string, delta: number) => {
+    setCart(cart.map(item => {
+      if (item.id === id) {
+        const newQty = Math.max(1, item.quantity + delta);
+        if (activeTab !== 'services' && !isRefundMode && item.stock !== undefined && newQty > item.stock) return item;
+        return { ...item, quantity: newQty };
+      }
+      return item;
+    }));
+  };
+
   const calculateSubtotal = () => cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   
   const calculateDiscountValue = () => {
@@ -66,215 +80,223 @@ const POSView: React.FC<Props> = ({ currency, t, mode = 'pos' }) => {
     return Number(discount) || 0;
   };
 
+  const calculateVAT = () => {
+    if (!isVatEnabled) return 0; // Return 0 if VAT is toggled off
+    const taxableAmount = calculateSubtotal() - calculateDiscountValue();
+    return taxableAmount * 0.05; // 5% VAT
+  };
+
   const calculateTotal = () => {
-    const sub = calculateSubtotal();
-    const discountVal = calculateDiscountValue();
-    return Math.max(0, sub - discountVal);
+    const net = calculateSubtotal() - calculateDiscountValue();
+    return net + calculateVAT();
   };
 
   const handleCheckout = async (method: string) => {
-    if (isProcessing || cart.length === 0) return;
+    if (cart.length === 0 || isProcessing) return;
     setIsProcessing(true);
-    
-    const finalTotal = calculateTotal();
-    const transactionId = `INV-${Date.now().toString().slice(-6)}`;
-    const finalAmount = isRefundMode ? -Math.abs(finalTotal) : finalTotal;
-    
-    const inv: Invoice = { 
-      id: transactionId, 
-      patientName: mode === 'services' ? 'Clinical Walk-in' : 'Pharmacy Client', 
-      date: new Date().toISOString().split('T')[0], 
-      amount: finalAmount, 
-      discount: discount, 
-      totalPaid: finalAmount, 
-      status: isRefundMode ? 'Refunded' : 'Paid', 
-      type: mode === 'services' ? 'Dental' : 'Pharmacy', 
+
+    const subtotal = calculateSubtotal();
+    const disc = calculateDiscountValue();
+    const vat = calculateVAT();
+    const grandTotal = subtotal - disc + vat;
+
+    const invoice: Invoice = {
+      id: `${isRefundMode ? 'REF' : 'INV'}-${Date.now().toString().slice(-8)}`,
+      patientName: 'Walk-in Customer',
+      date: new Date().toISOString().split('T')[0],
+      amount: isRefundMode ? -Math.abs(grandTotal) : grandTotal,
+      vat: isRefundMode ? -Math.abs(vat) : vat,
+      discount: disc,
+      totalPaid: isRefundMode ? -Math.abs(grandTotal) : grandTotal,
+      status: 'Paid',
+      type: activeTab === 'services' ? 'Dental' : 'Pharmacy',
       method: method,
-      isRefund: isRefundMode 
+      isRefund: isRefundMode
     };
 
-    const itemsToDeduct = cart.map(c => ({
-      id: c.id,
-      quantity: isRefundMode ? -c.quantity : c.quantity,
-      currentStock: inventory.find(i => i.id === c.id)?.stock || 0
+    const itemsToDeduct = activeTab === 'services' ? [] : cart.map(item => ({
+      id: item.id,
+      quantity: isRefundMode ? -item.quantity : item.quantity,
+      currentStock: item.stock || 0
     }));
-    
-    try {
-      const success = await addTransaction(inv, activeTab === 'inventory' ? itemsToDeduct : []);
-      if (success) {
-          setLastTransaction({ ...inv, items: [...cart], transactionId, total: finalAmount });
-          setShowReceipt(true);
-          setCart([]); 
-          setDiscount(0);
-          setIsRefundMode(false);
-      }
-    } catch (e) {
-      alert("Cillad ayaa dhacday!");
-    } finally {
-      setIsProcessing(false);
+
+    const success = await addTransaction(invoice, itemsToDeduct);
+
+    if (success) {
+      setLastTransaction({ ...invoice, items: [...cart] });
+      setShowReceipt(true);
+      setCart([]);
+      setDiscount(0);
+      setIsRefundMode(false);
+    } else {
+      alert("Checkout failed. Check your connection.");
     }
+    setIsProcessing(false);
   };
 
-  return (
-    <div className={`h-full flex flex-col lg:flex-row bg-white rounded-[2.5rem] shadow-sm border border-slate-200 overflow-hidden relative transition-all ${isRefundMode ? 'border-rose-400 bg-rose-50/10' : ''}`}>
-      {showReceipt && lastTransaction && mode === 'pos' && <InvoiceReceipt {...lastTransaction} t={t} onClose={() => setShowReceipt(false)} />}
-      {showReceipt && lastTransaction && mode === 'services' && <InvoiceComponent {...lastTransaction} onClose={() => setShowReceipt(false)} t={t} />}
+  const items = activeTab === 'inventory' ? inventory : clinicalServices;
+  const filteredItems = items.filter(i => i.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
-      <div className="flex-1 flex flex-col min-w-0 bg-slate-50/50">
-        <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-white backdrop-blur-xl bg-white/90">
-           <div className="flex items-center gap-4">
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-xl ${isRefundMode ? 'bg-rose-600' : (mode === 'services' ? 'bg-emerald-600' : 'bg-blue-600')}`}>
-                 {isRefundMode ? <RotateCcw className="w-6 h-6" /> : (mode === 'services' ? <Stethoscope className="w-6 h-6" /> : <Store className="w-6 h-6" />)}
-              </div>
-              <div>
-                <h2 className="text-2xl font-black text-slate-900 tracking-tight">{isRefundMode ? 'Refund Terminal' : (mode === 'services' ? 'Clinical Services' : 'Pharmacy POS')}</h2>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{isRefundMode ? 'Processing Return' : 'Ready for Transaction'}</p>
-              </div>
-           </div>
-           <div className="flex items-center gap-4">
-              <div className="relative w-64">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input 
-                  type="text" 
-                  placeholder="Search..." 
-                  value={searchTerm}
-                  onChange={e => setSearchTerm(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:bg-white focus:border-blue-500 transition-all"
-                />
-              </div>
-              <button onClick={() => setIsRefundMode(!isRefundMode)} className={`px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all flex items-center gap-2 ${isRefundMode ? 'bg-rose-600 text-white' : 'bg-white text-rose-600 border-rose-200 hover:bg-rose-50'}`}>
-                <RotateCcw className="w-4 h-4" /> Refund Mode
-              </button>
-           </div>
+  return (
+    <div className="h-[calc(100vh-10rem)] flex flex-col lg:flex-row gap-6 animate-in fade-in duration-500">
+      {showReceipt && lastTransaction && (
+        lastTransaction.type === 'Pharmacy' 
+        ? <InvoiceReceipt 
+            items={lastTransaction.items} 
+            total={lastTransaction.amount} 
+            vat={lastTransaction.vat}
+            paidAmount={lastTransaction.totalPaid} 
+            date={lastTransaction.date} 
+            transactionId={lastTransaction.id} 
+            method={lastTransaction.method} 
+            onClose={() => setShowReceipt(false)} 
+          />
+        : <InvoiceComponent 
+            items={lastTransaction.items} 
+            total={lastTransaction.amount} 
+            vat={lastTransaction.vat}
+            date={lastTransaction.date} 
+            transactionId={lastTransaction.id} 
+            method={lastTransaction.method} 
+            onClose={() => setShowReceipt(false)} 
+            t={t} 
+          />
+      )}
+
+      {/* Catalog Area */}
+      <div className="flex-1 bg-white rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col overflow-hidden">
+        <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex bg-slate-100 p-1.5 rounded-2xl">
+            <button onClick={() => { setActiveTab('inventory'); setCart([]); }} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${activeTab === 'inventory' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+              <Store className="w-4 h-4" /> Pharmacy
+            </button>
+            <button onClick={() => { setActiveTab('services'); setCart([]); }} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${activeTab === 'services' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+              <Stethoscope className="w-4 h-4" /> Clinical
+            </button>
+          </div>
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input type="text" placeholder={`Search ${activeTab}...`} value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-2xl text-xs font-bold outline-none transition-all" />
+          </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-8 no-scrollbar">
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
-            {(activeTab === 'services' ? clinicalServices : inventory)
-              .filter(i => i.name.toLowerCase().includes(searchTerm.toLowerCase()))
-              .map(item => (
-                <div key={item.id} onClick={() => addToCart(item)} className={`bg-white p-6 rounded-[2rem] border border-slate-100 cursor-pointer transition-all hover:shadow-2xl hover:border-blue-500 active:scale-95 group relative overflow-hidden ${(!isRefundMode && (item as Product).stock === 0) ? 'opacity-40 grayscale pointer-events-none' : ''}`}>
-                   <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 transition-colors ${activeTab === 'services' ? 'bg-emerald-50 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white' : 'bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white'}`}>
-                      {(item as Product).image ? (
-                        <img src={(item as Product).image} className="w-full h-full object-cover rounded-xl" />
-                      ) : (
-                        activeTab === 'services' ? <Stethoscope className="w-6 h-6" /> : <Package className="w-6 h-6" />
-                      )}
-                   </div>
-                   <h3 className="font-black text-slate-800 text-sm mb-1 leading-tight">{item.name}</h3>
-                   <div className="flex justify-between items-end mt-4">
-                      <span className="text-xl font-black text-slate-900">{currency}{item.price}</span>
-                      {activeTab === 'inventory' && <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-lg ${(item as Product).stock < 10 ? 'bg-rose-50 text-rose-600' : 'bg-slate-50 text-slate-400'}`}>Stock: {(item as Product).stock}</span>}
-                   </div>
-                </div>
-            ))}
-          </div>
+        <div className="flex-1 overflow-y-auto p-6 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 no-scrollbar">
+          {filteredItems.map(item => (
+            <button key={item.id} onClick={() => addToCart(item)} className="bg-slate-50 p-4 rounded-3xl border border-transparent hover:border-blue-500 hover:bg-white transition-all text-left flex flex-col h-full group">
+               <div className="aspect-square bg-white rounded-2xl mb-4 border border-slate-100 overflow-hidden flex items-center justify-center">
+                  {(item as Product).image ? <img src={(item as Product).image} className="w-full h-full object-cover group-hover:scale-110 transition-transform" /> : <ImageIcon className="w-8 h-8 text-slate-200" />}
+               </div>
+               <div className="flex-1">
+                 <h4 className="font-black text-slate-900 text-sm leading-tight mb-1 group-hover:text-blue-600 transition-colors">{item.name}</h4>
+                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{(item as Product).category || 'Service'}</p>
+               </div>
+               <div className="mt-4 flex items-center justify-between">
+                  <span className="font-black text-slate-900">${item.price.toFixed(2)}</span>
+                  {activeTab === 'inventory' && (
+                    <span className={`text-[9px] font-black px-2 py-1 rounded-lg ${(item as Product).stock < 10 ? 'bg-rose-50 text-rose-600' : 'bg-blue-50 text-blue-600'}`}>
+                      Stock: {(item as Product).stock}
+                    </span>
+                  )}
+               </div>
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Checkout Sidebar */}
-      <div className="w-full lg:w-[450px] bg-white border-l border-slate-100 flex flex-col shadow-2xl z-10">
-        <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-           <h3 className="text-sm font-black uppercase tracking-[0.2em] text-slate-900">Checkout Basket</h3>
-           <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-white text-[10px] font-black shadow-lg ${isRefundMode ? 'bg-rose-600' : 'bg-blue-600'}`}>{cart.length}</div>
+      {/* Cart Area */}
+      <div className="w-full lg:w-96 bg-slate-900 rounded-[2.5rem] flex flex-col overflow-hidden shadow-2xl">
+        <div className="p-8 flex justify-between items-center">
+          <div>
+            <h3 className="text-white font-black text-xl tracking-tight">Checkout</h3>
+            <div className="flex items-center gap-2 mt-1">
+               <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+               <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">{isRefundMode ? 'Refund Reversal' : 'New Transaction'}</p>
+            </div>
+          </div>
+          <button onClick={() => setIsRefundMode(!isRefundMode)} className={`p-3 rounded-2xl transition-all ${isRefundMode ? 'bg-rose-500 text-white shadow-lg' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`} title="Toggle Refund Mode">
+             <RotateCcw className="w-5 h-5" />
+          </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-8 space-y-6 no-scrollbar">
+        <div className="flex-1 overflow-y-auto px-8 space-y-4 no-scrollbar">
           {cart.length === 0 ? (
-             <div className="h-full flex flex-col items-center justify-center opacity-30 text-center">
-               <ShoppingBag className="w-32 h-32 mb-6 stroke-1" />
-               <p className="font-black uppercase tracking-[0.2em] text-[10px]">Your basket is empty</p>
-             </div>
+            <div className="h-full flex flex-col items-center justify-center opacity-20 py-12">
+               <ShoppingBag className="w-16 h-16 text-white mb-4" />
+               <p className="text-white font-black uppercase tracking-widest text-xs">Cart is empty</p>
+            </div>
           ) : (
-            cart.map((item, idx) => (
-              <div key={idx} className="flex items-center justify-between p-5 bg-slate-50 rounded-[1.5rem] border border-slate-100 group transition-all hover:bg-white hover:shadow-xl">
-                 <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center font-black text-blue-600 border border-slate-200 overflow-hidden shadow-sm">
-                      {item.image ? (
-                        <img src={item.image} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="text-xs">x{item.quantity}</div>
-                      )}
+            cart.map(item => (
+              <div key={item.id} className="bg-white/5 p-4 rounded-3xl border border-white/5 flex flex-col gap-3">
+                 <div className="flex justify-between items-start">
+                    <div className="overflow-hidden">
+                       <h5 className="text-white font-black text-sm truncate">{item.name}</h5>
+                       <p className="text-slate-500 font-bold text-[10px] uppercase tracking-widest">${item.price.toFixed(2)} / unit</p>
                     </div>
-                    <div>
-                       <p className="font-black text-slate-900 text-sm truncate w-32">{item.name}</p>
-                       <p className="text-[10px] font-bold text-blue-600">{item.quantity} x {currency}{item.price.toFixed(2)}</p>
-                    </div>
+                    <button onClick={() => removeFromCart(item.id)} className="text-slate-600 hover:text-rose-400 transition-colors"><Trash2 className="w-4 h-4" /></button>
                  </div>
-                 <button onClick={() => setCart(cart.filter(c => c.id !== item.id))} className="p-3 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"><Trash2 className="w-5 h-5" /></button>
+                 <div className="flex justify-between items-center">
+                    <div className="flex items-center bg-white/5 rounded-xl p-1 gap-4">
+                       <button onClick={() => updateQuantity(item.id, -1)} className="w-8 h-8 flex items-center justify-center bg-white/5 rounded-lg text-white hover:bg-white/10">-</button>
+                       <span className="text-white font-black text-xs">{item.quantity}</span>
+                       <button onClick={() => updateQuantity(item.id, 1)} className="w-8 h-8 flex items-center justify-center bg-white/5 rounded-lg text-white hover:bg-white/10">+</button>
+                    </div>
+                    <span className="text-white font-black text-sm">${(item.price * item.quantity).toFixed(2)}</span>
+                 </div>
               </div>
             ))
           )}
         </div>
 
-        <div className={`p-8 border-t border-slate-200 space-y-6 ${isRefundMode ? 'bg-rose-50/30' : 'bg-slate-50/30'}`}>
-          {/* Discount Controls - Now very clearly editable manually */}
-          {!isRefundMode && cart.length > 0 && (
-            <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm animate-in fade-in slide-in-from-bottom-2">
-              <div className="flex items-center justify-between mb-3 px-1">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                  <Tag className="w-3 h-3 text-blue-600" /> Manually Enter Discount
-                </span>
-                <div className="flex bg-slate-100 p-1 rounded-xl">
-                  <button 
-                    onClick={() => setDiscountType('percent')}
-                    className={`px-3 py-1 text-[10px] font-black rounded-lg transition-all ${discountType === 'percent' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
-                  >
-                    <Percent className="w-3 h-3" />
-                  </button>
-                  <button 
-                    onClick={() => setDiscountType('flat')}
-                    className={`px-3 py-1 text-[10px] font-black rounded-lg transition-all ${discountType === 'flat' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
-                  >
-                    {currency}
-                  </button>
-                </div>
-              </div>
-              <div className="relative group">
-                <input 
-                  type="number" 
-                  min="0"
-                  step="0.01"
-                  value={discount === 0 ? '' : discount}
-                  onChange={(e) => setDiscount(e.target.value === '' ? 0 : Number(e.target.value))}
-                  placeholder={`Enter ${discountType === 'percent' ? 'percentage %' : 'amount ' + currency}...`}
-                  className="w-full bg-slate-50 border-2 border-slate-50 focus:bg-white focus:border-blue-500 py-4 pl-5 pr-14 rounded-2xl outline-none font-black text-base transition-all placeholder:text-slate-300"
-                />
-                <span className="absolute right-5 top-1/2 -translate-y-1/2 font-black text-slate-300 text-lg pointer-events-none group-focus-within:text-blue-500 transition-colors">
-                  {discountType === 'percent' ? '%' : currency}
-                </span>
-              </div>
-              {discount > 0 && (
-                <div className="mt-3 px-1 text-[10px] font-bold text-blue-500 italic">
-                  Total deduction will be: {currency}{calculateDiscountValue().toFixed(2)}
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="space-y-4 px-2">
-             <div className="flex justify-between items-center text-slate-400 text-xs font-bold uppercase tracking-widest">
-                <span>Subtotal</span>
-                <span>{currency}{calculateSubtotal().toFixed(2)}</span>
+        <div className="p-8 bg-white/5 border-t border-white/5 space-y-4">
+          <div className="flex gap-4">
+             <div className="flex-1 relative">
+                <Tag className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
+                <input type="number" placeholder="Discount" value={discount} onChange={e => setDiscount(Number(e.target.value))} className="w-full pl-12 pr-4 py-3.5 bg-white/5 border border-white/10 rounded-2xl text-white text-xs font-bold outline-none focus:border-blue-500" />
              </div>
-             {!isRefundMode && discount > 0 && (
-                <div className="flex justify-between items-center text-rose-500 text-xs font-bold uppercase tracking-widest animate-in fade-in">
-                   <span>Manual Discount ({discountType === 'percent' ? `${discount}%` : currency})</span>
-                   <span>-{currency}{calculateDiscountValue().toFixed(2)}</span>
+             <button onClick={() => setDiscountType(discountType === 'percent' ? 'flat' : 'percent')} className="px-4 py-3.5 bg-white/5 border border-white/10 rounded-2xl text-blue-400 text-[10px] font-black uppercase tracking-widest">
+                {discountType === 'percent' ? <Percent className="w-4 h-4" /> : <DollarSign className="w-4 h-4" />}
+             </button>
+          </div>
+
+          <div className="space-y-2 py-4">
+             <div className="flex justify-between text-slate-400 text-[10px] font-black uppercase tracking-widest">
+                <span>Subtotal</span>
+                <span>${calculateSubtotal().toFixed(2)}</span>
+             </div>
+             <div className="flex justify-between text-rose-400 text-[10px] font-black uppercase tracking-widest">
+                <span>Discount</span>
+                <span>-${calculateDiscountValue().toFixed(2)}</span>
+             </div>
+             
+             {/* VAT Toggle Control */}
+             <div className="flex justify-between items-center py-1">
+                <div className="flex items-center gap-2">
+                   <button 
+                     onClick={() => setIsVatEnabled(!isVatEnabled)}
+                     className={`w-8 h-4 rounded-full relative transition-all ${isVatEnabled ? 'bg-emerald-500' : 'bg-slate-600'}`}
+                   >
+                      <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${isVatEnabled ? 'left-4.5' : 'left-0.5'}`}></div>
+                   </button>
+                   <span className="text-emerald-400 text-[10px] font-black uppercase tracking-widest">Apply VAT (5%)</span>
                 </div>
-             )}
-             <div className="pt-6 border-t border-slate-200 flex justify-between items-center">
-                <span className="text-sm font-black uppercase tracking-[0.2em] text-slate-900">Grand Total</span>
-                <span className={`text-4xl font-black ${isRefundMode ? 'text-rose-600' : 'text-blue-700'}`}>{isRefundMode ? '-' : ''}{currency}{calculateTotal().toFixed(2)}</span>
+                <span className={`text-emerald-400 text-[10px] font-black uppercase tracking-widest ${!isVatEnabled && 'opacity-30'}`}>
+                   +${calculateVAT().toFixed(2)}
+                </span>
+             </div>
+
+             <div className="h-px bg-white/5 my-2"></div>
+             <div className="flex justify-between items-center text-white">
+                <span className="text-sm font-black uppercase tracking-widest">Grand Total</span>
+                <span className="text-3xl font-black">${calculateTotal().toFixed(2)}</span>
              </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-             <button onClick={() => handleCheckout('Cash')} disabled={cart.length === 0 || isProcessing} className="py-5 bg-white border-2 border-slate-200 rounded-3xl font-black text-[10px] uppercase tracking-widest hover:border-blue-600 hover:text-blue-600 transition-all shadow-sm flex flex-col items-center gap-2">
-                <DollarSign className="w-5 h-5" /> Cash Payment
+             <button disabled={cart.length === 0 || isProcessing} onClick={() => handleCheckout('Cash')} className="py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 transition-all flex items-center justify-center gap-2">
+                <Wallet className="w-4 h-4" /> Cash
              </button>
-             <button onClick={() => handleCheckout('EVC-Plus')} disabled={cart.length === 0 || isProcessing} className={`py-5 text-white rounded-3xl font-black text-[10px] uppercase tracking-widest shadow-2xl transition-all flex flex-col items-center gap-2 ${isRefundMode ? 'bg-rose-600 hover:bg-rose-700' : 'bg-blue-600 hover:bg-blue-700'}`}>
-                <Wallet className="w-5 h-5" /> Mobile Money
+             <button disabled={cart.length === 0 || isProcessing} onClick={() => handleCheckout('EVC-Plus')} className="py-4 bg-blue-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all flex items-center justify-center gap-2">
+                <ReceiptText className="w-4 h-4" /> EVC-Plus
              </button>
           </div>
         </div>

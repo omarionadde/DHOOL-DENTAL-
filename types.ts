@@ -104,6 +104,7 @@ export interface Invoice {
   patientName: string;
   date: string;
   amount: number;
+  vat?: number;
   discount: number;
   totalPaid: number;
   status: 'Paid' | 'Pending' | 'Partial' | 'Refunded';

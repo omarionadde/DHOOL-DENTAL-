@@ -6,6 +6,7 @@ import { DhoolLogo } from './DhoolLogo';
 interface InvoiceProps {
   items: CartItem[];
   total: number;
+  vat?: number;
   paidAmount?: number;
   balance?: number;
   date: string;
@@ -21,6 +22,7 @@ declare const html2pdf: any;
 export const Invoice: React.FC<InvoiceProps> = ({ 
   items, 
   total = 0, 
+  vat = 0,
   paidAmount = 0, 
   balance = 0, 
   date, 
@@ -142,8 +144,17 @@ export const Invoice: React.FC<InvoiceProps> = ({
           <div className="flex justify-end mb-20">
              <div className="w-full max-w-xs space-y-4">
                 <div className="flex justify-between items-center text-slate-500 font-bold uppercase tracking-widest text-[10px]">
-                   <span>Total Outstanding</span>
-                   <span>${total.toFixed(2)}</span>
+                   <span>Taxable Amount (Net)</span>
+                   <span>${(total - (vat || 0)).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center text-slate-500 font-bold uppercase tracking-widest text-[10px]">
+                   <span>VAT (5%)</span>
+                   <span>${(vat || 0).toFixed(2)}</span>
+                </div>
+                <div className="h-px bg-slate-100"></div>
+                <div className="flex justify-between items-center">
+                   <span className="text-sm font-black text-slate-900 uppercase tracking-widest">Grand Total</span>
+                   <span className="text-3xl font-black text-blue-600">${total.toFixed(2)}</span>
                 </div>
                 {paidAmount > 0 && (
                    <div className="flex justify-between items-center text-emerald-600 font-bold uppercase tracking-widest text-[10px]">
@@ -154,7 +165,7 @@ export const Invoice: React.FC<InvoiceProps> = ({
                 <div className="h-px bg-slate-100"></div>
                 <div className="flex justify-between items-center">
                    <span className="text-sm font-black text-slate-900 uppercase tracking-widest">Net Balance</span>
-                   <span className="text-3xl font-black text-blue-600">${balance.toFixed(2)}</span>
+                   <span className="text-xl font-black text-slate-900">${balance.toFixed(2)}</span>
                 </div>
              </div>
           </div>
