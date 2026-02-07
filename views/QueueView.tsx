@@ -13,24 +13,24 @@ const QueueView: React.FC = () => {
   // Filter for today's appointments
   const todaysQueue = appointments.filter(a => a.date === today && a.status !== 'Cancelled');
 
-  // Helper to sort by time string (e.g. "09:00 AM")
-  const sortByTime = (a: Appointment, b: Appointment) => {
-    // Basic string comparison works for HH:MM format, 
-    // but we can make it more robust if needed.
-    return a.time.localeCompare(b.time);
+  // Helper to sort by Insertion Order (ID is timestamp based)
+  // User requested to ignore "time" (schedule time) and use entry order.
+  const sortByEntry = (a: Appointment, b: Appointment) => {
+    return a.id.localeCompare(b.id);
   };
 
   const waiting = todaysQueue
     .filter(a => a.status === 'Scheduled')
-    .sort(sortByTime);
+    .sort(sortByEntry);
 
   const inProgress = todaysQueue
     .filter(a => a.status === 'In Progress')
-    .sort(sortByTime);
+    .sort(sortByEntry);
 
   const completed = todaysQueue
     .filter(a => a.status === 'Completed')
-    .sort((a, b) => b.time.localeCompare(a.time)) // Show most recently completed at the top
+    // Show most recently entered (which are likely most recently completed in FIFO) at the top
+    .sort((a, b) => b.id.localeCompare(a.id)) 
     .slice(0, 8); 
 
   const handleStatusChange = async (id: string, status: 'Scheduled' | 'In Progress' | 'Completed') => {
@@ -44,7 +44,7 @@ const QueueView: React.FC = () => {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shrink-0">
         <div>
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">Safaka Bukaanada (Live)</h1>
-          <p className="text-slate-500 font-medium">U kala horaysii bukaanka sida ay u soo galeen iyo waqtigooda.</p>
+          <p className="text-slate-500 font-medium">U kala horaysii bukaanka sida ay u soo galeen (First Come, First Served).</p>
         </div>
         <div className="flex items-center gap-3">
             <div className="bg-emerald-50 text-emerald-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border border-emerald-100 flex items-center gap-2">
@@ -58,7 +58,7 @@ const QueueView: React.FC = () => {
 
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6 min-h-0">
         
-        {/* WAITING COLUMN - SORTED BY TIME ASC */}
+        {/* WAITING COLUMN - SORTED BY ENTRY ASC */}
         <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col overflow-hidden">
             <div className="p-6 border-b border-slate-100 bg-amber-50/50 flex items-center justify-between">
                 <h3 className="text-lg font-black text-amber-600 flex items-center gap-2">
@@ -82,7 +82,7 @@ const QueueView: React.FC = () => {
             </div>
         </div>
 
-        {/* IN TREATMENT COLUMN - SORTED BY TIME ASC */}
+        {/* IN TREATMENT COLUMN - SORTED BY ENTRY ASC */}
         <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col overflow-hidden ring-4 ring-blue-50/50">
             <div className="p-6 border-b border-slate-100 bg-blue-50/50 flex items-center justify-between">
                 <h3 className="text-lg font-black text-blue-600 flex items-center gap-2">
@@ -106,7 +106,7 @@ const QueueView: React.FC = () => {
             </div>
         </div>
 
-        {/* COMPLETED COLUMN - SORTED BY TIME DESC */}
+        {/* COMPLETED COLUMN - SORTED BY ENTRY DESC */}
         <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col overflow-hidden">
             <div className="p-6 border-b border-slate-100 bg-emerald-50/50 flex items-center justify-between">
                 <h3 className="text-lg font-black text-emerald-600 flex items-center gap-2">
@@ -163,6 +163,7 @@ const QueueCard = ({ apt, action, actionLabel, actionColor, actionIcon, isActive
                     <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-sm shadow-sm transition-colors ${
                         isActive ? 'bg-blue-600 text-white' : isNext ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-500'
                     }`}>
+                        {/* Use Index/Sequence for display if needed, but Time is what's stored. Keeping time display but sorting is changed. */}
                         {apt.time.split(' ')[0]}
                     </div>
                     <div>
