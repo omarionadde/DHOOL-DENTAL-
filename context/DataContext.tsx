@@ -2,6 +2,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { firebaseService } from '../services/firebaseService';
 import { secureStorage } from '../utils/secureStorage';
+import { auth } from '../lib/firebase';
+import { onAuthStateChanged, User } from 'firebase/auth';
 import { 
   Patient, Medicine, Appointment, Invoice, Expense, Salary, 
   StaffUser, ClinicalService, PatientHistory, Prescription, Supplier, LabResult, ActivityLog
@@ -108,11 +110,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   
   const [isLoading, setIsLoading] = useState(true);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
+
+  // Track Auth State
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setFirebaseUser(user);
+    });
+    return () => unsubscribe();
+  }, []);
 
   // Setup Real-time Listeners
   useEffect(() => {
-    // We only set up listeners if we are online. If offline, we use local state.
-    if (!isOnline) {
+    // We only set up listeners if we are online AND authenticated.
+    if (!isOnline || !firebaseUser) {
         setIsLoading(false);
         return;
     }
@@ -213,7 +224,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         unsubUsers();
         unsubLogs();
     };
-  }, [isOnline]);
+  }, [isOnline, firebaseUser]);
 
   const logAction = async (action: string, entity: string, details: string) => {
     const user = secureStorage.getItem('dhool_user');
