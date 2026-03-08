@@ -389,9 +389,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const addNewUser = async (u: StaffUser) => {
-    const res = await firebaseService.insertUser(u);
-    await logAction('CREATE', 'USER', `Created new staff account: ${u.email}`);
-    return { success: !!res };
+    try {
+        const res = await firebaseService.createUserAccount(u);
+        await logAction('CREATE', 'USER', `Created new staff account: ${u.email}`);
+        return { success: true };
+    } catch (e: any) {
+        console.error("Add User Failed:", e);
+        return { success: false, error: e.message };
+    }
   };
 
   const removeUser = async (id: string) => {

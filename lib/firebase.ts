@@ -4,7 +4,7 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getAnalytics } from "firebase/analytics";
 
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: "AIzaSyAsH4xGoCqZvrANGCRfjF1BntV9Ob5bqAk",
   authDomain: "dhool-6bb8f.firebaseapp.com",
   databaseURL: "https://dhool-6bb8f-default-rtdb.firebaseio.com",
@@ -16,7 +16,7 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase using the modular SDK pattern
-const app = initializeApp(firebaseConfig);
+export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 

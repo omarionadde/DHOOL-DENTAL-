@@ -1,10 +1,11 @@
 
-import { db, auth } from '../lib/firebase';
+import { db, auth, firebaseConfig } from '../lib/firebase';
+import { initializeApp, deleteApp } from "firebase/app";
 import { 
   collection, getDocs, updateDoc, deleteDoc, doc, 
   query, orderBy, setDoc, getDoc, limit, where, onSnapshot 
 } from "firebase/firestore";
-import { signInWithEmailAndPassword, signOut, updatePassword, createUserWithEmailAndPassword } from "firebase/auth";
+import { signInWithEmailAndPassword, signOut, updatePassword, createUserWithEmailAndPassword, getAuth } from "firebase/auth";
 import { Patient, Medicine, Appointment, Invoice, PatientHistory, StaffUser, ClinicalService, Expense, Salary, Prescription, Supplier, LabResult, ActivityLog } from '../types';
 import { secureStorage } from '../utils/secureStorage';
 
@@ -224,6 +225,47 @@ export const firebaseService = {
   insertLog: (log: ActivityLog) => handleRequest(() => setDoc(doc(db, "activity_logs", log.id), log).then(() => log), KEYS.LOGS, 'insert', log),
   
   getUsers: () => handleRequest(() => getDocs(query(collection(db, "users"), orderBy("name"))).then(s => s.docs.map(d => ({ ...d.data(), id: d.id })) as StaffUser[]), KEYS.USERS, 'get'),
+  
+  createUserAccount: async (user: StaffUser) => {
+    if (isDbOffline) {
+        return handleLocalFallback(KEYS.USERS, 'insert', user);
+    }
+
+    try {
+        const secondaryApp = initializeApp(firebaseConfig, "SecondaryApp");
+        const secondaryAuth = getAuth(secondaryApp);
+        
+        let uid = user.id;
+        const normalizedEmail = user.email.toLowerCase().trim();
+        try {
+            const userCredential = await createUserWithEmailAndPassword(secondaryAuth, normalizedEmail, user.password || 'dhool123');
+            uid = userCredential.user.uid;
+            await signOut(secondaryAuth);
+        } catch (authError: any) {
+            console.error("Auth Creation Error:", authError);
+            if (authError.code === 'auth/email-already-in-use') {
+                const q = query(collection(db, "users"), where("email", "==", normalizedEmail));
+                const snapshot = await getDocs(q);
+                if (!snapshot.empty) {
+                    uid = snapshot.docs[0].id;
+                }
+            } else {
+                throw authError;
+            }
+        } finally {
+            await deleteApp(secondaryApp);
+        }
+
+        const userWithUid = { ...user, id: uid, email: normalizedEmail };
+        await setDoc(doc(db, "users", uid), userWithUid);
+        handleLocalFallback(KEYS.USERS, 'insert', userWithUid);
+        return userWithUid;
+    } catch (error) {
+        console.error("Create User Error:", error);
+        throw error;
+    }
+  },
+
   insertUser: (user: StaffUser) => handleRequest(() => setDoc(doc(db, "users", user.id), user).then(() => user), KEYS.USERS, 'insert', user),
   updateUser: (id: string, updates: Partial<StaffUser>) => handleRequest(() => updateDoc(doc(db, "users", id), updates).then(() => updates), KEYS.USERS, 'update', { id, updates }),
   deleteUser: (id: string) => handleRequest(() => deleteDoc(doc(db, "users", id)), KEYS.USERS, 'delete', id),
