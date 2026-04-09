@@ -1,0 +1,142 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Fields: id, name, role, email, status, avatar, password
+    //
+    // Collection: patients
+    // Fields: id, name, age, gender, phone, email, lastVisit, medicalHistory, condition, balance, teethStatus, images
+    //
+    // Collection: appointments
+    // Fields: id, patientId, patientName, doctor, date, time, status, reason
+    //
+    // Collection: inventory
+    // Fields: id, name, stock, price, expiryDate, category, image, supplierId
+    //
+    // Collection: services
+    // Fields: id, name, price, category
+    //
+    // Collection: invoices
+    // Fields: id, patientName, date, amount, discount, totalPaid, status, type, method, isRefund
+    //
+    // Collection: expenses
+    // Fields: id, description, category, amount, date
+    //
+    // Collection: salaries
+    // Fields: id, staffName, role, amount, month, date
+    //
+    // Collection: activity_logs
+    // Fields: id, userId, userName, action, entity, details, timestamp
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin') ||
+          (request.auth.token.email == "samiiryare23@gmail.com") ||
+          (request.auth.token.email == "admin@dhool.com")
+        );
+    }
+
+    function isDoctor() {
+      return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Doctor';
+    }
+
+    function isStaff() {
+      return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Staff';
+    }
+
+    function isAccountant() {
+      return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Accountant';
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAdmin();
+      allow delete: if isAdmin() && request.auth.uid != userId;
+    }
+
+    match /patients/{patientId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || isDoctor() || isStaff();
+    }
+
+    match /patient_history/{historyId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || isDoctor();
+    }
+
+    match /appointments/{appointmentId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || isDoctor() || isStaff();
+    }
+
+    match /inventory/{medicineId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || isStaff();
+    }
+
+    match /services/{serviceId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /invoices/{invoiceId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || isAccountant() || isStaff();
+    }
+
+    match /expenses/{expenseId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || isAccountant();
+    }
+
+    match /salaries/{salaryId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || isAccountant();
+    }
+
+    match /suppliers/{supplierId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || isStaff();
+    }
+
+    match /lab_results/{labId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || isDoctor();
+    }
+
+    match /prescriptions/{rxId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || isDoctor();
+    }
+
+    match /activity_logs/{logId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+    }
+
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -32,10 +32,10 @@ const handleOfflineLogin = (email: string, password: string) => {
     const normalizedEmail = email.toLowerCase().trim();
     
     // Hardcoded Admin Fallback
-    if (normalizedEmail === 'admin@dhool.com' && password === 'admin123') {
+    if ((normalizedEmail === 'admin@dhool.com' || normalizedEmail === 'samiiryare23@gmail.com') && password === 'admin123') {
         const defaultAdmin: StaffUser = {
             id: 'offline_admin',
-            email: 'admin@dhool.com',
+            email: normalizedEmail,
             name: 'System Admin (Offline)',
             role: 'Admin',
             status: 'Active',
@@ -144,11 +144,11 @@ export const firebaseService = {
          return userData;
       }
 
-      if (normalizedEmail === 'admin@dhool.com') {
+      if (normalizedEmail === 'admin@dhool.com' || normalizedEmail === 'samiiryare23@gmail.com') {
          const adminProfile: StaffUser = {
             id: uid,
             email: normalizedEmail,
-            name: 'System Admin',
+            name: normalizedEmail === 'samiiryare23@gmail.com' ? 'Primary Admin' : 'System Admin',
             role: 'Admin',
             status: 'Active',
             avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=Admin`
@@ -165,14 +165,16 @@ export const firebaseService = {
       }
       
       // Auto-create admin if not found
-      if ((error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') && normalizedEmail === 'admin@dhool.com' && password === 'admin123') {
+      if ((error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') && 
+          (normalizedEmail === 'admin@dhool.com' || normalizedEmail === 'samiiryare23@gmail.com') && 
+          password === 'admin123') {
           try {
               const userCredential = await createUserWithEmailAndPassword(auth, email, password);
               const uid = userCredential.user.uid;
               const adminProfile: StaffUser = {
                   id: uid,
                   email: normalizedEmail,
-                  name: 'System Admin',
+                  name: normalizedEmail === 'samiiryare23@gmail.com' ? 'Primary Admin' : 'System Admin',
                   role: 'Admin',
                   status: 'Active',
                   avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=Admin`

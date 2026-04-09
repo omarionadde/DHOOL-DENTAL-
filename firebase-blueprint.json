@@ -1,0 +1,151 @@
+{
+  "entities": {
+    "Patient": {
+      "title": "Patient",
+      "description": "Patient record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "age": { "type": "number" },
+        "gender": { "type": "string", "enum": ["Male", "Female"] },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "lastVisit": { "type": "string" },
+        "medicalHistory": { "type": "array", "items": { "type": "string" } },
+        "condition": { "type": "string" },
+        "balance": { "type": "number" }
+      },
+      "required": ["id", "name", "age", "gender", "phone"]
+    },
+    "StaffUser": {
+      "title": "Staff User",
+      "description": "Clinical staff member",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["Admin", "Doctor", "Staff", "Accountant"] },
+        "email": { "type": "string" },
+        "status": { "type": "string", "enum": ["Active", "Inactive"] }
+      },
+      "required": ["id", "name", "role", "email", "status"]
+    },
+    "Medicine": {
+      "title": "Medicine",
+      "description": "Pharmacy inventory item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "stock": { "type": "number" },
+        "price": { "type": "number" },
+        "expiryDate": { "type": "string" },
+        "category": { "type": "string" }
+      },
+      "required": ["id", "name", "stock", "price", "expiryDate", "category"]
+    },
+    "ClinicalService": {
+      "title": "Clinical Service",
+      "description": "Dental service offered",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "price": { "type": "number" },
+        "category": { "type": "string" }
+      },
+      "required": ["id", "name", "price", "category"]
+    },
+    "Appointment": {
+      "title": "Appointment",
+      "description": "Patient appointment",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string" },
+        "patientName": { "type": "string" },
+        "doctor": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "status": { "type": "string", "enum": ["Scheduled", "In Progress", "Completed", "Cancelled"] },
+        "reason": { "type": "string" }
+      },
+      "required": ["id", "patientId", "patientName", "doctor", "date", "time", "status"]
+    },
+    "Invoice": {
+      "title": "Invoice",
+      "description": "Billing record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientName": { "type": "string" },
+        "date": { "type": "string" },
+        "amount": { "type": "number" },
+        "discount": { "type": "number" },
+        "totalPaid": { "type": "number" },
+        "status": { "type": "string", "enum": ["Paid", "Pending", "Partial", "Refunded"] },
+        "type": { "type": "string", "enum": ["Dental", "Pharmacy"] },
+        "method": { "type": "string" }
+      },
+      "required": ["id", "patientName", "date", "amount", "discount", "totalPaid", "status", "type", "method"]
+    },
+    "Expense": {
+      "title": "Expense",
+      "description": "Clinic expense",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string", "enum": ["Utilities", "Equipment", "Rent", "Procurement", "Salaries", "Other"] },
+        "amount": { "type": "number" },
+        "date": { "type": "string" }
+      },
+      "required": ["id", "description", "category", "amount", "date"]
+    },
+    "Salary": {
+      "title": "Salary",
+      "description": "Staff salary payment",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "staffName": { "type": "string" },
+        "role": { "type": "string" },
+        "amount": { "type": "number" },
+        "month": { "type": "string" },
+        "date": { "type": "string" }
+      },
+      "required": ["id", "staffName", "role", "amount", "month", "date"]
+    },
+    "ActivityLog": {
+      "title": "Activity Log",
+      "description": "System activity log",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "action": { "type": "string" },
+        "entity": { "type": "string" },
+        "details": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "userId", "userName", "action", "entity", "details", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/patients/{patientId}": { "schema": "Patient", "description": "Patients collection" },
+    "/users/{userId}": { "schema": "StaffUser", "description": "Staff users collection" },
+    "/inventory/{medicineId}": { "schema": "Medicine", "description": "Pharmacy inventory" },
+    "/services/{serviceId}": { "schema": "ClinicalService", "description": "Clinical services" },
+    "/appointments/{appointmentId}": { "schema": "Appointment", "description": "Appointments" },
+    "/invoices/{invoiceId}": { "schema": "Invoice", "description": "Invoices" },
+    "/expenses/{expenseId}": { "schema": "Expense", "description": "Expenses" },
+    "/salaries/{salaryId}": { "schema": "Salary", "description": "Salaries" },
+    "/activity_logs/{logId}": { "schema": "ActivityLog", "description": "Activity logs" },
+    "/patient_history/{historyId}": { "schema": { "$ref": "PatientHistory" }, "description": "Patient clinical history" },
+    "/prescriptions/{rxId}": { "schema": { "$ref": "Prescription" }, "description": "Prescriptions" },
+    "/lab_results/{labId}": { "schema": { "$ref": "LabResult" }, "description": "Lab results" },
+    "/suppliers/{supplierId}": { "schema": { "$ref": "Supplier" }, "description": "Suppliers" }
+  }
+}
