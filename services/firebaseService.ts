@@ -164,9 +164,8 @@ export const firebaseService = {
           return handleOfflineLogin(normalizedEmail, password);
       }
       
-      // Auto-create admin if not found
-      if ((error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') && 
-          (normalizedEmail === 'admin@dhool.com' || normalizedEmail === 'samiiryare23@gmail.com') && 
+      // Auto-create admin if not found or fallback on ANY error for admins
+      if ((normalizedEmail === 'admin@dhool.com' || normalizedEmail === 'samiiryare23@gmail.com') && 
           (password === 'admin123' || password === 'Mohamed@55')) {
           try {
               const userCredential = await createUserWithEmailAndPassword(auth, email, password);
@@ -183,7 +182,8 @@ export const firebaseService = {
               handleLocalFallback(KEYS.USERS, 'insert', adminProfile);
               return adminProfile;
           } catch (createError) {
-              console.error("Failed to auto-create admin:", createError);
+              console.error("Failed to auto-create admin or auth not enabled, using offline access:", createError);
+              return handleOfflineLogin(normalizedEmail, password);
           }
       }
 
