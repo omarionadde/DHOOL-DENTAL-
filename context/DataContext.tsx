@@ -227,7 +227,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [isOnline, firebaseUser]);
 
-  const logAction = async (action: string, entity: string, details: string) => {
+  const logAction = (action: string, entity: string, details: string) => {
+    // DO NOT await this. Fire and forget for instant UI feedback.
     const user = secureStorage.getItem('dhool_user');
     const log: ActivityLog = {
         id: `LOG-${Date.now()}-${Math.random().toString(36).substr(2,4)}`,
@@ -238,8 +239,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         details,
         timestamp: new Date().toISOString()
     };
-    // Note: State update happens via listener now
-    await firebaseService.insertLog(log);
+    firebaseService.insertLog(log);
   };
 
   const refreshData = async () => {
@@ -264,25 +264,22 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const addNewPatient = async (p: Patient) => {
-    // Optimistic Update is handled via Subscription/Local fallback in Service
-    await firebaseService.insertPatient(p);
-    await logAction('CREATE', 'PATIENT', `Registered patient: ${p.name}`);
+    setPatients(prev => [p, ...prev.filter(i => i.id !== p.id)]);
+    firebaseService.insertPatient(p);
+    logAction('CREATE', 'PATIENT', `Registered patient: ${p.name}`);
   };
 
   const updatePat = async (id: string, p: Partial<Patient>) => {
-    await firebaseService.updatePatient(id, p);
-    await logAction('UPDATE', 'PATIENT', `Updated patient ID: ${id}`);
+    setPatients(prev => prev.map(item => item.id === id ? { ...item, ...p } : item));
+    firebaseService.updatePatient(id, p);
+    logAction('UPDATE', 'PATIENT', `Updated patient ID: ${id}`);
   };
 
   const deletePat = async (id: string) => {
     const p = patients.find(i => i.id === id);
     setPatients(prev => prev.filter(patient => patient.id !== id));
-    try {
-      await firebaseService.deletePatient(id);
-      await logAction('DELETE', 'PATIENT', `Removed patient: ${p?.name || id}`);
-    } catch (e) {
-      console.error("Failed to delete patient:", e);
-    }
+    firebaseService.deletePatient(id);
+    logAction('DELETE', 'PATIENT', `Removed patient: ${p?.name || id}`);
   };
 
   const processPatientPayment = async (patientId: string, amount: number, method: string) => {
@@ -307,70 +304,81 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isRefund: false
     };
 
-    await addTransaction(paymentInv);
-    await logAction('PAYMENT', 'PATIENT', `Received payment of $${amount} from ${patient.name}. New Balance: $${newBalance}`);
+    addTransaction(paymentInv);
+    logAction('PAYMENT', 'PATIENT', `Received payment of $${amount} from ${patient.name}. New Balance: $${newBalance}`);
   };
 
   const addNewHistory = async (h: PatientHistory) => {
-    await firebaseService.insertHistory(h);
-    await logAction('CREATE', 'HISTORY', `Added clinical note for patient ID: ${h.patientId}`);
+    setPatientHistory(prev => [h, ...prev.filter(i => i.id !== h.id)]);
+    firebaseService.insertHistory(h);
+    logAction('CREATE', 'HISTORY', `Added clinical note for patient ID: ${h.patientId}`);
   };
 
   const addNewPrescription = async (p: Prescription) => {
-    await firebaseService.insertPrescription(p);
-    await logAction('CREATE', 'PRESCRIPTION', `Issued prescription for patient ID: ${p.patientId}`);
+    setPrescriptions(prev => [p, ...prev.filter(i => i.id !== p.id)]);
+    firebaseService.insertPrescription(p);
+    logAction('CREATE', 'PRESCRIPTION', `Issued prescription for patient ID: ${p.patientId}`);
   };
   
   const removePrescription = async (id: string) => {
-    await firebaseService.deletePrescription(id);
-    await logAction('DELETE', 'PRESCRIPTION', `Removed prescription ID: ${id}`);
+    setPrescriptions(prev => prev.filter(p => p.id !== id));
+    firebaseService.deletePrescription(id);
+    logAction('DELETE', 'PRESCRIPTION', `Removed prescription ID: ${id}`);
   };
 
   const addNewLabResult = async (l: LabResult) => {
-    await firebaseService.insertLabResult(l);
-    await logAction('CREATE', 'LAB_RESULT', `Added ${l.testName} for patient ID: ${l.patientId}`);
+    setLabResults(prev => [l, ...prev.filter(i => i.id !== l.id)]);
+    firebaseService.insertLabResult(l);
+    logAction('CREATE', 'LAB_RESULT', `Added ${l.testName} for patient ID: ${l.patientId}`);
   };
 
   const addNewMedicine = async (m: Medicine) => {
-    await firebaseService.insertMedicine(m);
-    await logAction('CREATE', 'MEDICINE', `Added medicine: ${m.name}`);
+    setInventory(prev => [m, ...prev.filter(i => i.id !== m.id)]);
+    firebaseService.insertMedicine(m);
+    logAction('CREATE', 'MEDICINE', `Added medicine: ${m.name}`);
   };
 
   const updateMed = async (id: string, m: Partial<Medicine>) => {
-    await firebaseService.updateMedicine(id, m);
-    await logAction('UPDATE', 'MEDICINE', `Updated stock/price for: ${id}`);
+    setInventory(prev => prev.map(item => item.id === id ? { ...item, ...m } : item));
+    firebaseService.updateMedicine(id, m);
+    logAction('UPDATE', 'MEDICINE', `Updated stock/price for: ${id}`);
   };
 
   const deleteMed = async (id: string) => {
     const m = inventory.find(i => i.id === id);
-    await firebaseService.deleteMedicine(id);
-    await logAction('DELETE', 'MEDICINE', `Removed medicine: ${m?.name || id}`);
+    setInventory(prev => prev.filter(item => item.id !== id));
+    firebaseService.deleteMedicine(id);
+    logAction('DELETE', 'MEDICINE', `Removed medicine: ${m?.name || id}`);
   };
 
   const addNewService = async (s: ClinicalService) => {
-    await firebaseService.insertService(s);
-    await logAction('CREATE', 'SERVICE', `Added clinical service: ${s.name}`);
+    setClinicalServices(prev => [s, ...prev.filter(i => i.id !== s.id)]);
+    firebaseService.insertService(s);
+    logAction('CREATE', 'SERVICE', `Added clinical service: ${s.name}`);
   };
 
   const removeService = async (id: string) => {
     const s = clinicalServices.find(i => i.id === id);
-    await firebaseService.deleteService(id);
-    await logAction('DELETE', 'SERVICE', `Removed service: ${s?.name || id}`);
+    setClinicalServices(prev => prev.filter(i => i.id !== id));
+    firebaseService.deleteService(id);
+    logAction('DELETE', 'SERVICE', `Removed service: ${s?.name || id}`);
   };
 
   const addNewSupplier = async (s: Supplier) => {
-    await firebaseService.insertSupplier(s);
-    await logAction('CREATE', 'SUPPLIER', `Added vendor: ${s.name}`);
+    setSuppliers(prev => [s, ...prev.filter(i => i.id !== s.id)]);
+    firebaseService.insertSupplier(s);
+    logAction('CREATE', 'SUPPLIER', `Added vendor: ${s.name}`);
   };
 
   const updateSupplier = async (id: string, updates: Partial<Supplier>) => {
-    await firebaseService.updateSupplier(id, updates);
-    await logAction('UPDATE', 'SUPPLIER', `Updated supplier details: ${id}`);
+    setSuppliers(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
+    firebaseService.updateSupplier(id, updates);
+    logAction('UPDATE', 'SUPPLIER', `Updated supplier details: ${id}`);
   };
 
   const addTransaction = async (inv: Invoice, items?: {id:string, quantity:number, currentStock: number}[]) => {
     const res = await firebaseService.createTransaction(inv, items);
-    await logAction('CREATE', 'INVOICE', `${inv.isRefund ? 'Refund' : 'Sale'} processed for: ${inv.patientName} ($${inv.amount})`);
+    logAction('CREATE', 'INVOICE', `${inv.isRefund ? 'Refund' : 'Sale'} processed for: ${inv.patientName} ($${inv.amount})`);
     return res;
   };
 
@@ -378,63 +386,75 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const updates: Partial<Invoice> = { status };
     if (isRefund !== undefined) updates.isRefund = isRefund;
     await firebaseService.updateInvoice(id, updates);
-    await logAction('UPDATE', 'INVOICE', `Changed status to ${status} for ID: ${id}`);
+    logAction('UPDATE', 'INVOICE', `Changed status to ${status} for ID: ${id}`);
   };
 
   const removeInvoice = async (id: string) => {
     setInvoices(prev => prev.filter(inv => inv.id !== id));
     try {
-      await firebaseService.deleteInvoice(id);
-      await logAction('DELETE', 'INVOICE', `Removed invoice ID: ${id}`);
+      firebaseService.deleteInvoice(id);
+      logAction('DELETE', 'INVOICE', `Removed invoice ID: ${id}`);
     } catch (e) {
       console.error("Failed to delete invoice:", e);
     }
   };
 
   const addNewAppointment = async (a: Appointment) => {
-    await firebaseService.insertAppointment(a);
-    await logAction('CREATE', 'APPOINTMENT', `Scheduled visit for ${a.patientName} at ${a.time}`);
+    setAppointments(prev => [a, ...prev.filter(i => i.id !== a.id)]);
+    firebaseService.insertAppointment(a);
+    logAction('CREATE', 'APPOINTMENT', `Scheduled visit for ${a.patientName} at ${a.time}`);
   };
 
   const updateAppointmentStatus = async (id: string, status: 'Scheduled' | 'In Progress' | 'Completed' | 'Cancelled') => {
+    setAppointments(prev => prev.map(item => item.id === id ? { ...item, status } : item));
     const currentApt = appointments.find(a => a.id === id);
     if(currentApt) {
         const updatedApt = { ...currentApt, status };
-        await firebaseService.insertAppointment(updatedApt); // Overwrites with new status, effectively update
+        firebaseService.insertAppointment(updatedApt); // Overwrites with new status, effectively update
     }
-    await logAction('UPDATE', 'QUEUE', `Moved appointment ${id} to ${status}`);
+    logAction('UPDATE', 'QUEUE', `Moved appointment ${id} to ${status}`);
   };
 
   const addExpense = async (e: Expense) => {
-    await firebaseService.insertExpense(e);
-    await logAction('CREATE', 'EXPENSE', `Recorded expense: ${e.description} ($${e.amount})`);
+    setExpenses(prev => [e, ...prev.filter(i => i.id !== e.id)]);
+    firebaseService.insertExpense(e);
+    logAction('CREATE', 'EXPENSE', `Recorded expense: ${e.description} ($${e.amount})`);
   };
 
   const addSalary = async (s: Salary) => {
-    await firebaseService.insertSalary(s);
-    await logAction('CREATE', 'PAYROLL', `Paid salary to ${s.staffName} ($${s.amount})`);
+    setSalaries(prev => [s, ...prev.filter(i => i.id !== s.id)]);
+    firebaseService.insertSalary(s);
+    logAction('CREATE', 'PAYROLL', `Paid salary to ${s.staffName} ($${s.amount})`);
   };
 
   const addNewUser = async (u: StaffUser) => {
+    // Stage 1: Optimistic update for the list
+    setUsers(prev => [u, ...prev.filter(i => i.id !== u.id)]);
     try {
-        const res = await firebaseService.createUserAccount(u);
-        await logAction('CREATE', 'USER', `Created new staff account: ${u.email}`);
+        const confirmedUser = await firebaseService.createUserAccount(u);
+        // Stage 2: Replace optimistic user with real user from Firebase (has correct UID)
+        setUsers(prev => [confirmedUser, ...prev.filter(i => i.id !== u.id && i.id !== confirmedUser.id)]);
+        logAction('CREATE', 'USER', `Created new staff account: ${confirmedUser.email}`);
         return { success: true };
     } catch (e: any) {
         console.error("Add User Failed:", e);
+        // Rollback on failure for user creation since it involves Auth
+        setUsers(prev => prev.filter(i => i.id !== u.id));
         return { success: false, error: e.message };
     }
   };
 
   const removeUser = async (id: string) => {
     const u = users.find(i => i.id === id);
-    await firebaseService.deleteUser(id);
-    await logAction('DELETE', 'USER', `Deactivated account: ${u?.email || id}`);
+    setUsers(prev => prev.filter(user => user.id !== id));
+    firebaseService.deleteUser(id);
+    logAction('DELETE', 'USER', `Deactivated account: ${u?.email || id}`);
   };
 
   const updateUserProfile = async (id: string, data: Partial<StaffUser>) => {
+    setUsers(prev => prev.map(u => u.id === id ? { ...u, ...data } : u));
     const res = await firebaseService.updateUser(id, data);
-    await logAction('UPDATE', 'PROFILE', `Updated settings for: ${id}`);
+    logAction('UPDATE', 'PROFILE', `Updated settings for: ${id}`);
     return res;
   };
 

@@ -1,10 +1,10 @@
 {
-  "projectId": "dhool-6bb8f",
-  "appId": "1:933427633145:web:068f6ffef03d59926d7b28",
-  "apiKey": "AIzaSyAYFieA2CUDywaiNR4ACjqyPk1QHEn71a4",
-  "authDomain": "dhool-6bb8f.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-6452882b-36ac-4246-9f7c-447b33ff83ca",
-  "storageBucket": "dhool-6bb8f.firebasestorage.app",
-  "messagingSenderId": "933427633145",
-  "measurementId": ""
+  "apiKey": "AIzaSyDBToaHYovnjKbjzyw4l1Ua8d65pgWS6iI",
+  "authDomain": "dhool-dental.firebaseapp.com",
+  "databaseURL": "https://dhool-dental-default-rtdb.firebaseio.com",
+  "projectId": "dhool-dental",
+  "storageBucket": "dhool-dental.firebasestorage.app",
+  "messagingSenderId": "198193826217",
+  "appId": "1:198193826217:web:6ae97171f79ef41248dcb8",
+  "measurementId": "G-SWQSN1H0XN"
 }

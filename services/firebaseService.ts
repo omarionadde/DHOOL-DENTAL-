@@ -103,34 +103,26 @@ const handleRequest = async <T>(
 
   try {
     const data = await operation();
-    // Update local storage for cache
+    // Update local storage for cache - but don't let it block
     try {
         const currentLocal = secureStorage.getItem(localKey) || [];
         if (action === 'get' && Array.isArray(data)) {
            secureStorage.setItem(localKey, data);
-        } else if (action === 'insert') {
-           const newItem = Array.isArray(payload) ? payload[0] : payload;
-           const dataToStore = (data && typeof data === 'object') ? data : newItem;
-           const filtered = currentLocal.filter((i:any) => i.id !== dataToStore.id);
-           secureStorage.setItem(localKey, [dataToStore, ...filtered]);
-        } else if (action === 'update' && payload?.id) {
-           const updated = currentLocal.map((i:any) => i.id === payload.id ? {...i, ...payload.updates} : i);
-           secureStorage.setItem(localKey, updated);
-        } else if (action === 'delete') {
-           const updated = currentLocal.filter((i:any) => i.id !== payload);
-           secureStorage.setItem(localKey, updated);
+        } else {
+           handleLocalFallback(localKey, action, payload || data);
         }
     } catch (e) {}
     return data;
   } catch (error: any) {
-    console.error(`Firebase Error [${action}]:`, error);
-    const offlineCodes = ['unavailable', 'network-request-failed', 'auth/network-request-failed', 'auth/firebase-app-check-token-is-invalid'];
-    if (offlineCodes.includes(error.code) || error.message?.includes('app-check-token')) {
-        isDbOffline = true;
+    if (action === 'get') {
+        return handleLocalFallback(localKey, action, payload);
     }
+    // For writes, we let it fail or handled by the caller, but still try local fallback to keep UI moving
     return handleLocalFallback(localKey, action, payload);
   }
 };
+
+let secondaryAppInstance: any = null;
 
 export const firebaseService = {
   login: async (email: string, password?: string) => {
@@ -143,21 +135,72 @@ export const firebaseService = {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const uid = userCredential.user.uid;
 
-      let userDoc = await getDoc(doc(db, "users", uid));
+      let userData: StaffUser | null = null;
       
-      if (userDoc.exists()) {
-        const userData = { ...userDoc.data(), id: uid } as StaffUser;
+      try {
+        // Fetch profile by UID (primary)
+        const userDoc = await getDoc(doc(db, "users", uid));
+        
+        if (userDoc.exists()) {
+          const remoteData = userDoc.data();
+          userData = { ...remoteData, id: uid } as StaffUser;
+          
+          // Re-enforce admin role if it's one of the special emails but Firestore says otherwise
+          if ((normalizedEmail === 'admin@dhool.com' || normalizedEmail === 'samiiryare23@gmail.com') && userData.role !== 'Admin') {
+            userData.role = 'Admin';
+            await updateDoc(doc(db, "users", uid), { role: 'Admin' });
+          }
+        } else {
+          // If doc doesn't exist by UID, try query by email (secondary)
+          const emailQuerySnapshot = await getDocs(query(collection(db, "users"), where("email", "==", normalizedEmail), limit(1)));
+          if (!emailQuerySnapshot.empty) {
+            userData = { ...emailQuerySnapshot.docs[0].data(), id: emailQuerySnapshot.docs[0].id } as StaffUser;
+            // Fix role if needed
+            if ((normalizedEmail === 'admin@dhool.com' || normalizedEmail === 'samiiryare23@gmail.com') && userData.role !== 'Admin') {
+                userData.role = 'Admin';
+                await updateDoc(doc(db, "users", userData.id), { role: 'Admin' });
+            }
+          }
+        }
+      } catch (dbError: any) {
+        console.warn("Firestore error during login profile fetch:", dbError);
+        
+        // If it's a special admin account, prioritize giving them Admin role even if DB fails
+        if (normalizedEmail === 'admin@dhool.com' || normalizedEmail === 'samiiryare23@gmail.com') {
+          return {
+            id: uid,
+            email: normalizedEmail,
+            name: normalizedEmail === 'samiiryare23@gmail.com' ? 'Primary Admin' : 'System Admin',
+            role: 'Admin',
+            status: 'Active',
+            avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=Admin`
+          };
+        }
+
+        // Try local fallback
+        const localUser = handleOfflineLogin(normalizedEmail, password);
+        if (localUser) return localUser;
+        
+        // Final fallback: check local users cache for the actual role
+        const cachedUsers: StaffUser[] = secureStorage.getItem(KEYS.USERS) || [];
+        const cachedMatch = cachedUsers.find(u => u.email.toLowerCase() === normalizedEmail);
+        if (cachedMatch) return cachedMatch;
+
+        // Last resort
+        return { 
+          id: uid, 
+          role: 'Staff', 
+          status: 'Active',
+          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${uid}`,
+          ...cachedMatch, // Spread if found but let id/role be priority if null
+          email: normalizedEmail,
+          name: normalizedEmail.split('@')[0]
+        };
+      }
+      
+      if (userData) {
         handleLocalFallback(KEYS.USERS, 'insert', userData);
         return userData;
-      } 
-      
-      const q = query(collection(db, "users"), where("email", "==", normalizedEmail));
-      const querySnapshot = await getDocs(q);
-      
-      if (!querySnapshot.empty) {
-         const userData = querySnapshot.docs[0].data() as StaffUser;
-         handleLocalFallback(KEYS.USERS, 'insert', userData);
-         return userData;
       }
 
       if (normalizedEmail === 'admin@dhool.com' || normalizedEmail === 'samiiryare23@gmail.com') {
@@ -169,18 +212,19 @@ export const firebaseService = {
             status: 'Active',
             avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=Admin`
          };
-         await setDoc(doc(db, "users", uid), adminProfile);
+         try {
+           await setDoc(doc(db, "users", uid), adminProfile);
+         } catch (e) {
+           console.warn("Failed to save admin profile to Firestore, using local only:", e);
+         }
          return adminProfile;
       }
       return null;
 
     } catch (error: any) {
-      if (error.code === 'auth/network-request-failed') {
-          isDbOffline = true;
-          return handleOfflineLogin(normalizedEmail, password);
-      }
+      console.error("Login Error:", error);
       
-      // Auto-create admin if not found or fallback on ANY error for admins
+      // Auto-create admin if not found or fallback for special admin accounts
       if ((normalizedEmail === 'admin@dhool.com' || normalizedEmail === 'samiiryare23@gmail.com') && 
           (password === 'admin123' || password === 'Mohamed@55')) {
           try {
@@ -198,30 +242,17 @@ export const firebaseService = {
               handleLocalFallback(KEYS.USERS, 'insert', adminProfile);
               return adminProfile;
           } catch (createError) {
-              console.error("Failed to auto-create admin or auth not enabled, using offline access:", createError);
-              isDbOffline = true;
+              console.error("Failed to auto-create admin, checking offline fallback:", createError);
               return handleOfflineLogin(normalizedEmail, password);
           }
       }
 
       if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') {
-          try {
-             const q = query(collection(db, "users"), where("email", "==", normalizedEmail));
-             const snapshot = await getDocs(q);
-             if (!snapshot.empty) {
-                 const userData = snapshot.docs[0].data() as StaffUser;
-                 if (userData.password && userData.password === password) {
-                     try { await createUserWithEmailAndPassword(auth, email, password); } catch(e) {}
-                     handleLocalFallback(KEYS.USERS, 'insert', userData);
-                     return userData;
-                 }
-             }
-          } catch (dbError) {}
-          isDbOffline = true;
           const localUser = handleOfflineLogin(normalizedEmail, password);
           if (localUser) return localUser;
       }
-      return null;
+      
+      throw error;
     }
   },
 
@@ -261,7 +292,12 @@ export const firebaseService = {
 
   // One-time Actions (Create/Update/Delete still need explicit calls)
   
-  insertLog: (log: ActivityLog) => handleRequest(() => setDoc(doc(db, "activity_logs", log.id), log).then(() => log), KEYS.LOGS, 'insert', log),
+  insertLog: (log: ActivityLog) => {
+    // Non-blocking fire and forget for speed
+    setDoc(doc(db, "activity_logs", log.id), log).catch(e => console.warn("Background log sync failed:", e));
+    handleLocalFallback(KEYS.LOGS, 'insert', log);
+    return Promise.resolve(log);
+  },
   
   getUsers: () => handleRequest(() => getDocs(query(collection(db, "users"), orderBy("name"))).then(s => s.docs.map(d => ({ ...d.data(), id: d.id })) as StaffUser[]), KEYS.USERS, 'get'),
   
@@ -270,18 +306,25 @@ export const firebaseService = {
         return handleLocalFallback(KEYS.USERS, 'insert', user);
     }
 
+    // Protect Admin Role
+    const normalizedEmail = user.email.toLowerCase().trim();
+    const isAdminEmail = normalizedEmail === 'admin@dhool.com' || normalizedEmail === 'samiiryare23@gmail.com';
+    const finalUser = isAdminEmail ? { ...user, role: 'Admin' as const } : user;
+
     try {
-        const secondaryApp = initializeApp(firebaseConfig, "SecondaryApp");
-        const secondaryAuth = getAuth(secondaryApp);
+        // Cache secondary app instance to avoid repeated heavy initialization
+        if (!secondaryAppInstance) {
+            secondaryAppInstance = initializeApp(firebaseConfig, "SecondaryApp");
+        }
+        const secondaryAuth = getAuth(secondaryAppInstance);
         
         let uid = user.id;
-        const normalizedEmail = user.email.toLowerCase().trim();
         try {
             const userCredential = await createUserWithEmailAndPassword(secondaryAuth, normalizedEmail, user.password || 'dhool123');
             uid = userCredential.user.uid;
             
             // Write to Firestore using the primary app (admin authenticated)
-            const userWithUid = { ...user, id: uid, email: normalizedEmail };
+            const userWithUid = { ...finalUser, id: uid, email: normalizedEmail };
             await setDoc(doc(db, "users", uid), userWithUid);
             
             await signOut(secondaryAuth);
@@ -296,15 +339,13 @@ export const firebaseService = {
                 const snapshot = await getDocs(q);
                 if (!snapshot.empty) {
                     uid = snapshot.docs[0].id;
-                    const userWithUid = { ...user, id: uid, email: normalizedEmail };
+                    const userWithUid = { ...finalUser, id: uid, email: normalizedEmail };
                     // Try to update existing user doc using primary db (admin)
                     await setDoc(doc(db, "users", uid), userWithUid, { merge: true });
                     return userWithUid;
                 }
             }
             throw authError;
-        } finally {
-            await deleteApp(secondaryApp);
         }
     } catch (error) {
         console.error("Create User Error:", error);
@@ -313,7 +354,16 @@ export const firebaseService = {
   },
 
   insertUser: (user: StaffUser) => handleRequest(() => setDoc(doc(db, "users", user.id), user).then(() => user), KEYS.USERS, 'insert', user),
-  updateUser: (id: string, updates: Partial<StaffUser>) => handleRequest(() => updateDoc(doc(db, "users", id), updates).then(() => updates), KEYS.USERS, 'update', { id, updates }),
+  updateUser: (id: string, updates: Partial<StaffUser>) => handleRequest(() => {
+    // If it's a special admin account, don't let the role be changed to Staff by mistake
+    const finalUpdates = { ...updates };
+    const cachedUsers: StaffUser[] = secureStorage.getItem(KEYS.USERS) || [];
+    const user = cachedUsers.find(u => u.id === id);
+    if (user && (user.email === 'admin@dhool.com' || user.email === 'samiiryare23@gmail.com')) {
+       if (finalUpdates.role) finalUpdates.role = 'Admin';
+    }
+    return updateDoc(doc(db, "users", id), finalUpdates).then(() => finalUpdates);
+  }, KEYS.USERS, 'update', { id, updates }),
   deleteUser: (id: string) => handleRequest(() => deleteDoc(doc(db, "users", id)), KEYS.USERS, 'delete', id),
 
   // Fallback Getters (used if real-time fails or for initial load check)
