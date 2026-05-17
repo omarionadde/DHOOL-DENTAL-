@@ -46,10 +46,10 @@ service cloud.firestore {
     function isAdmin() {
       return isAuthenticated() &&
         (
+          request.auth.token.email == "samiiryare23@gmail.com" ||
+          request.auth.token.email == "admin@dhool.com" ||
           (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin') ||
-          (request.auth.token.email == "samiiryare23@gmail.com") ||
-          (request.auth.token.email == "admin@dhool.com")
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "Admin")
         );
     }
 
@@ -133,7 +133,7 @@ service cloud.firestore {
 
     match /activity_logs/{logId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
+      allow write: if isAuthenticated();
     }
 
     match /{path=**} {

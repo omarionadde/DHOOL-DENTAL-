@@ -4,7 +4,7 @@ import { DhoolLogo } from './DhoolLogo';
 import { Printer, Download, X } from 'lucide-react';
 
 interface LabResultPrintProps {
-  labResult: LabResult;
+  labResults: LabResult[];
   patient: Patient;
   onClose: () => void;
 }
@@ -12,7 +12,7 @@ interface LabResultPrintProps {
 declare const html2pdf: any;
 
 export const LabResultPrint: React.FC<LabResultPrintProps> = ({ 
-  labResult, 
+  labResults, 
   patient,
   onClose 
 }) => {
@@ -25,7 +25,7 @@ export const LabResultPrint: React.FC<LabResultPrintProps> = ({
     if (!element) return;
     const opt = {
       margin: 10,
-      filename: `Dhool_Lab_${patient.name.replace(/\s+/g, '_')}_${labResult.date}.pdf`,
+      filename: `Dhool_Lab_${patient.name.replace(/\s+/g, '_')}_${labResults[0]?.date || 'Report'}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
       html2canvas: { scale: 2, useCORS: true },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
@@ -37,6 +37,8 @@ export const LabResultPrint: React.FC<LabResultPrintProps> = ({
        alert("PDF library loading... please try again.");
     }
   };
+
+  if (!labResults || labResults.length === 0) return null;
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[200] flex items-center justify-center p-4 print:p-0 print:bg-white print:static">
@@ -75,8 +77,8 @@ export const LabResultPrint: React.FC<LabResultPrintProps> = ({
             </div>
             <div className="text-right">
               <h2 className="text-3xl font-black text-slate-200 uppercase tracking-tighter mb-2">Lab Report</h2>
-              <p className="text-xs font-black text-slate-900">Lab ID: #{labResult.id.slice(-6).toUpperCase()}</p>
-              <p className="text-xs font-bold text-slate-500">{labResult.date}</p>
+              <p className="text-xs font-black text-slate-900">Lab ID: #{labResults[0].id.slice(-6).toUpperCase()}</p>
+              <p className="text-xs font-bold text-slate-500">{labResults[0].date}</p>
             </div>
           </div>
 
@@ -98,31 +100,33 @@ export const LabResultPrint: React.FC<LabResultPrintProps> = ({
             </div>
           </div>
 
-          {/* Lab Test Detail */}
-          <div className="mb-12 border border-slate-200 rounded-xl overflow-hidden">
-            <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex justify-between items-center">
-              <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Investigation / Test</p>
-                <h3 className="text-xl font-black text-slate-900">{labResult.testName}</h3>
+          {/* Lab Tests Detail */}
+          {labResults.map((labResult, idx) => (
+            <div key={labResult.id} className="mb-6 border border-slate-200 rounded-xl overflow-hidden">
+              <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex justify-between items-center">
+                <div>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Investigation / Test {labResults.length > 1 ? `#${idx + 1}` : ''}</p>
+                  <h3 className="text-xl font-black text-slate-900">{labResult.testName}</h3>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Status</p>
+                  <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                    labResult.status === 'Normal' ? 'bg-emerald-100 text-emerald-700' :
+                    labResult.status === 'Abnormal' ? 'bg-amber-100 text-amber-700' :
+                    'bg-rose-100 text-rose-700'
+                  }`}>
+                    {labResult.status}
+                  </span>
+                </div>
               </div>
-              <div className="text-right">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Status</p>
-                <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
-                  labResult.status === 'Normal' ? 'bg-emerald-100 text-emerald-700' :
-                  labResult.status === 'Abnormal' ? 'bg-amber-100 text-amber-700' :
-                  'bg-rose-100 text-rose-700'
-                }`}>
-                  {labResult.status}
-                </span>
+              <div className="p-6">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Result / Findings</p>
+                <div className="prose prose-sm max-w-none text-slate-700">
+                  <p className="whitespace-pre-line text-sm leading-relaxed">{labResult.result}</p>
+                </div>
               </div>
             </div>
-            <div className="p-6">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Result / Findings</p>
-              <div className="prose prose-sm max-w-none text-slate-700">
-                <p className="whitespace-pre-line text-sm leading-relaxed">{labResult.result}</p>
-              </div>
-            </div>
-          </div>
+          ))}
 
           {/* Footer / Signature */}
           <div className="flex justify-between items-end pt-10 mt-auto border-t border-slate-50">
@@ -132,7 +136,7 @@ export const LabResultPrint: React.FC<LabResultPrintProps> = ({
             </div>
             <div className="text-center w-48">
               <div className="border-b border-slate-900 pb-2 mb-2 italic font-serif text-slate-800">
-                Dr. {labResult.doctorName || 'Laboratory Technologist'}
+                Dr. {labResults[0].doctorName || 'Laboratory Technologist'}
               </div>
               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Authorized Signature</p>
             </div>

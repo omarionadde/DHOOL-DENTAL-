@@ -8,6 +8,7 @@ const PharmacyView: React.FC = () => {
   const { inventory, addNewMedicine, updateMed, deleteMed } = useData();
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   
   const [formData, setFormData] = useState({ 
@@ -78,8 +79,8 @@ const PharmacyView: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this medicine?')) return;
     await deleteMed(id);
+    setDeleteConfirm(null);
   };
 
   return (
@@ -149,9 +150,16 @@ const PharmacyView: React.FC = () => {
                         <button onClick={() => openEditModal(m)} className="p-3 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-2xl transition-all">
                             <Edit2 className="w-5 h-5" />
                         </button>
-                        <button onClick={() => handleDelete(m.id)} className="p-3 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-2xl transition-all">
-                            <Trash2 className="w-5 h-5" />
-                        </button>
+                        {deleteConfirm === m.id ? (
+                          <div className="flex items-center gap-1 bg-rose-50 p-1 rounded-2xl border border-rose-100">
+                             <button onClick={() => handleDelete(m.id)} className="px-3 py-1 bg-rose-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-700">Hubi</button>
+                             <button onClick={() => setDeleteConfirm(null)} className="px-3 py-1 text-slate-500 hover:text-slate-700 text-[10px] font-black uppercase tracking-widest">Maya</button>
+                          </div>
+                        ) : (
+                          <button onClick={() => setDeleteConfirm(m.id)} className="p-3 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-2xl transition-all">
+                              <Trash2 className="w-5 h-5" />
+                          </button>
+                        )}
                     </div>
                   </td>
                 </tr>

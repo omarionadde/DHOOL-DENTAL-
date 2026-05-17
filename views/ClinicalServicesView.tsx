@@ -15,6 +15,8 @@ const ClinicalServicesView: React.FC = () => {
     category: 'Dental'
   });
 
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const s: ClinicalService = {
@@ -29,8 +31,8 @@ const ClinicalServicesView: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Ma hubtaa inaad tirtirto adeegan?')) return;
     await removeService(id);
+    setDeleteConfirm(null);
   };
 
   const filteredServices = clinicalServices.filter(s => 
@@ -128,9 +130,16 @@ const ClinicalServicesView: React.FC = () => {
                     <td className="px-10 py-6 font-black text-slate-900 text-xl">${s.price.toFixed(2)}</td>
                     <td className="px-10 py-6 text-right">
                       <div className="flex justify-end gap-2">
-                          <button onClick={() => handleDelete(s.id)} className="p-4 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-[1.5rem] transition-all">
-                              <Trash2 className="w-5 h-5" />
-                          </button>
+                          {deleteConfirm === s.id ? (
+                            <div className="flex items-center gap-2 bg-rose-50 p-2 rounded-[1.5rem] border border-rose-100">
+                               <button onClick={() => handleDelete(s.id)} className="px-4 py-2 bg-rose-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-700">Hubi</button>
+                               <button onClick={() => setDeleteConfirm(null)} className="px-4 py-2 text-slate-500 hover:text-slate-700 text-[10px] font-black uppercase tracking-widest">Maya</button>
+                            </div>
+                          ) : (
+                            <button onClick={() => setDeleteConfirm(s.id)} className="p-4 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-[1.5rem] transition-all">
+                                <Trash2 className="w-5 h-5" />
+                            </button>
+                          )}
                       </div>
                     </td>
                   </tr>

@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { CreditCard, Search, FileText, Download, Filter, DollarSign, TrendingUp, Clock, Printer, RotateCcw } from 'lucide-react';
+import { CreditCard, Search, FileText, Download, Filter, DollarSign, TrendingUp, Clock, Printer, RotateCcw, Trash2 } from 'lucide-react';
 import { Invoice, StaffUser } from '../types';
 import { Invoice as InvoiceComponent } from '../components/Invoice';
 import { InvoiceReceipt } from '../components/InvoiceReceipt';
@@ -11,19 +11,17 @@ interface Props {
 }
 
 const BillingView: React.FC<Props> = ({ user }) => {
-  const { invoices, addTransaction, updateInvoiceStatus } = useData();
+  const { invoices, addTransaction, updateInvoiceStatus, removeInvoice } = useData();
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [isProcessingRefund, setIsProcessingRefund] = useState<string | null>(null);
+  const [invoiceToDelete, setInvoiceToDelete] = useState<string | null>(null);
+  const [refundToConfirm, setRefundToConfirm] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
   const handleRefund = async (originalInv: Invoice) => {
     // Validate if already refunded
     if (originalInv.isRefund || originalInv.status === 'Refunded') {
       alert("Biilkan mar hore ayaa laga laabtay!");
-      return;
-    }
-
-    if (!confirm(`Ma hubtaa inaad ka laabato biilka #${originalInv.id}? Tani waxay abuuri doontaa biil lid ku ah (Reversal).`)) {
       return;
     }
 
@@ -184,14 +182,67 @@ const BillingView: React.FC<Props> = ({ user }) => {
                           <Printer className="w-5 h-5" />
                         </button>
                         {user.role === 'Admin' && inv.amount > 0 && inv.status !== 'Refunded' && (
-                          <button 
-                            onClick={() => handleRefund(inv)} 
-                            disabled={isProcessingRefund === inv.id}
-                            className={`p-3 rounded-2xl transition-all ${isProcessingRefund === inv.id ? 'text-slate-200 cursor-not-allowed opacity-50' : 'text-slate-300 hover:text-rose-600 hover:bg-rose-50'}`} 
-                            title="Ka laabo biilkan (Refund/Reverse)"
-                          >
-                            <RotateCcw className={`w-5 h-5 ${isProcessingRefund === inv.id ? 'animate-spin' : ''}`} />
-                          </button>
+                          <div className="relative">
+                            {refundToConfirm === inv.id ? (
+                              <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center bg-white border border-amber-200 shadow-lg rounded-2xl p-1 z-10 whitespace-nowrap">
+                                <button 
+                                  onClick={() => {
+                                    handleRefund(inv);
+                                    setRefundToConfirm(null);
+                                  }}
+                                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                                >
+                                  Hubi (Refund)
+                                </button>
+                                <button 
+                                  onClick={() => setRefundToConfirm(null)}
+                                  className="px-3 py-1.5 text-slate-500 hover:text-slate-700 text-[10px] font-black uppercase tracking-widest transition-all"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <button 
+                                onClick={() => setRefundToConfirm(inv.id)} 
+                                disabled={isProcessingRefund === inv.id}
+                                className={`p-3 rounded-2xl transition-all ${isProcessingRefund === inv.id ? 'text-slate-200 cursor-not-allowed opacity-50' : 'text-slate-300 hover:text-rose-600 hover:bg-rose-50'}`} 
+                                title="Ka laabo biilkan (Refund/Reverse)"
+                              >
+                                <RotateCcw className={`w-5 h-5 ${isProcessingRefund === inv.id ? 'animate-spin' : ''}`} />
+                              </button>
+                            )}
+                          </div>
+                        )}
+                        {user.role === 'Admin' && (
+                          <div className="relative">
+                            {invoiceToDelete === inv.id ? (
+                              <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center bg-white border border-rose-200 shadow-lg rounded-2xl p-1 z-10 whitespace-nowrap">
+                                <button 
+                                  onClick={() => {
+                                    removeInvoice(inv.id);
+                                    setInvoiceToDelete(null);
+                                  }}
+                                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                                >
+                                  Hubi (Confirm)
+                                </button>
+                                <button 
+                                  onClick={() => setInvoiceToDelete(null)}
+                                  className="px-3 py-1.5 text-slate-500 hover:text-slate-700 text-[10px] font-black uppercase tracking-widest transition-all"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <button 
+                                onClick={() => setInvoiceToDelete(inv.id)}
+                                className="p-3 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-2xl transition-all" 
+                                title="Tirtir (Delete)"
+                              >
+                                <Trash2 className="w-5 h-5" />
+                              </button>
+                            )}
+                          </div>
                         )}
                     </div>
                   </td>

@@ -183,6 +183,7 @@ export const firebaseService = {
               return adminProfile;
           } catch (createError) {
               console.error("Failed to auto-create admin or auth not enabled, using offline access:", createError);
+              isDbOffline = true;
               return handleOfflineLogin(normalizedEmail, password);
           }
       }
@@ -200,6 +201,7 @@ export const firebaseService = {
                  }
              }
           } catch (dbError) {}
+          isDbOffline = true;
           const localUser = handleOfflineLogin(normalizedEmail, password);
           if (localUser) return localUser;
       }
@@ -318,6 +320,7 @@ export const firebaseService = {
 
   getInvoices: () => handleRequest(() => getDocs(query(collection(db, "invoices"), orderBy("date", "desc"))).then(s => s.docs.map(d => ({ ...d.data(), id: d.id })) as Invoice[]), KEYS.INVOICES, 'get'),
   updateInvoice: (id: string, updates: Partial<Invoice>) => handleRequest(() => updateDoc(doc(db, "invoices", id), updates).then(() => updates), KEYS.INVOICES, 'update', { id, updates }),
+  deleteInvoice: (id: string) => handleRequest(() => deleteDoc(doc(db, "invoices", id)), KEYS.INVOICES, 'delete', id),
   createTransaction: async (invoice: Invoice, itemsToDeduct?: { id: string; quantity: number, currentStock: number }[]) => {
     if (isDbOffline) return handleLocalTransaction(invoice, itemsToDeduct);
     try {

@@ -27,7 +27,7 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [printingRx, setPrintingRx] = useState<Prescription | null>(null);
   const [showReportPrint, setShowReportPrint] = useState(false);
-  const [printingLab, setPrintingLab] = useState<LabResult | null>(null);
+  const [printingLabs, setPrintingLabs] = useState<LabResult[] | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   
   // Registration State
@@ -45,6 +45,8 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('Cash');
   const [manualDebt, setManualDebt] = useState('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // History Form
   const [diagnosis, setDiagnosis] = useState('');
@@ -108,12 +110,15 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
     }
   };
 
+  const [deleteImageConfirm, setDeleteImageConfirm] = useState<string | null>(null);
+  const [deleteRxConfirm, setDeleteRxConfirm] = useState<string | null>(null);
+
   const handleDeleteImage = async (imageId: string) => {
       if(!selectedPatient) return;
-      if(!confirm('Are you sure you want to delete this image?')) return;
       const updatedImages = (selectedPatient.images || []).filter(img => img.id !== imageId);
       await updatePat(selectedPatient.id, { images: updatedImages });
       setSelectedPatient({...selectedPatient, images: updatedImages});
+      setDeleteImageConfirm(null);
   };
 
   const handleAddLab = async (e: React.FormEvent) => {
@@ -143,7 +148,8 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
     );
 
     if (duplicate) {
-      alert("Bukaankan horay ayaa loo diiwaangeliyay! Fadlan hubi magaca ama lambarka taleefanka.");
+      setErrorMessage("Bukaankan horay ayaa loo diiwaangeliyay! Fadlan hubi magaca ama lambarka taleefanka.");
+      setTimeout(() => setErrorMessage(null), 5000);
       return;
     }
 
@@ -198,7 +204,8 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
     // Update local view
     setSelectedPatient(prev => prev ? {...prev, balance: (prev.balance || 0) - amount} : null);
     setPaymentAmount('');
-    alert("Payment processed successfully!");
+    setSuccessMessage("Payment processed successfully!");
+    setTimeout(() => setSuccessMessage(null), 3000);
   };
 
   const handleAddManualDebt = async (e: React.FormEvent) => {
@@ -276,11 +283,11 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
       )}
 
       {/* Lab Printing Modal */}
-      {printingLab && selectedPatient && (
+      {printingLabs && selectedPatient && (
         <LabResultPrint 
-          labResult={printingLab} 
+          labResults={printingLabs} 
           patient={selectedPatient} 
-          onClose={() => setPrintingLab(null)} 
+          onClose={() => setPrintingLabs(null)} 
         />
       )}
 
@@ -502,9 +509,18 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
                                          <div key={idx} className="bg-white p-3 rounded-3xl border border-slate-100 shadow-sm group relative">
                                              <div className="aspect-square rounded-2xl overflow-hidden mb-3 relative">
                                                  <img src={img.url} className="w-full h-full object-cover" />
-                                                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                                                     <button onClick={() => setSelectedImage(img.url)} className="p-2 bg-white/20 hover:bg-white/40 rounded-xl text-white backdrop-blur-sm"><Eye className="w-5 h-5" /></button>
-                                                     <button onClick={() => handleDeleteImage(img.id)} className="p-2 bg-white/20 hover:bg-rose-500/80 rounded-xl text-white backdrop-blur-sm"><Trash2 className="w-5 h-5" /></button>
+                                                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
+                                                     {deleteImageConfirm === img.id ? (
+                                                       <div className="flex flex-col gap-1 p-2">
+                                                          <button onClick={() => handleDeleteImage(img.id)} className="px-3 py-1 bg-rose-600 text-white rounded-xl text-[10px] font-black uppercase shadow-lg">Tirtir</button>
+                                                          <button onClick={(e) => { e.stopPropagation(); setDeleteImageConfirm(null); }} className="px-3 py-1 bg-slate-800 text-white rounded-xl text-[10px] font-black uppercase shadow-lg">Maya</button>
+                                                       </div>
+                                                     ) : (
+                                                       <div className="flex items-center justify-center gap-2">
+                                                          <button onClick={() => setSelectedImage(img.url)} className="p-2 bg-white/20 hover:bg-white/40 rounded-xl text-white backdrop-blur-sm"><Eye className="w-5 h-5" /></button>
+                                                          <button onClick={() => setDeleteImageConfirm(img.id)} className="p-2 bg-white/20 hover:bg-rose-500/80 rounded-xl text-white backdrop-blur-sm"><Trash2 className="w-5 h-5" /></button>
+                                                       </div>
+                                                     )}
                                                  </div>
                                              </div>
                                              <div>
@@ -797,13 +813,20 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
                                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{rx.date} • Dr. {rx.doctorName}</p>
                                           </div>
                                        </div>
-                                       <div className="flex gap-2">
+                                       <div className="flex gap-2 relative">
                                           <button onClick={() => setPrintingRx(rx)} className="p-2 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all" title="Print Prescription">
                                              <Printer className="w-4 h-4" />
                                           </button>
-                                          <button onClick={() => { if(confirm('Are you sure you want to delete this prescription record?')) removePrescription(rx.id) }} className="p-2 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all">
-                                             <Trash2 className="w-4 h-4" />
-                                          </button>
+                                          {deleteRxConfirm === rx.id ? (
+                                            <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-1 bg-white border border-rose-200 shadow-lg rounded-2xl p-1 z-10 whitespace-nowrap">
+                                               <button onClick={() => { removePrescription(rx.id); setDeleteRxConfirm(null); }} className="px-3 py-1 bg-rose-600 text-white rounded-xl text-[10px] font-black uppercase shadow-lg">Hubi/Delete</button>
+                                               <button onClick={() => setDeleteRxConfirm(null)} className="px-3 py-1 text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-xl text-[10px] font-black uppercase">Maya</button>
+                                            </div>
+                                          ) : (
+                                            <button onClick={() => setDeleteRxConfirm(rx.id)} className="p-2 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all">
+                                               <Trash2 className="w-4 h-4" />
+                                            </button>
+                                          )}
                                        </div>
                                     </div>
 
@@ -862,7 +885,17 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
                           </div>
                        </div>
                        <div className="lg:col-span-2 space-y-6">
-                          <h3 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-3"><Microscope className="w-5 h-5 text-slate-400" /> Diagnostic History</h3>
+                          <div className="flex justify-between items-center">
+                             <h3 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-3"><Microscope className="w-5 h-5 text-slate-400" /> Diagnostic History</h3>
+                             {labResults.filter(l => l.patientId === selectedPatient.id).length > 0 && (
+                               <button 
+                                 onClick={() => setPrintingLabs(labResults.filter(l => l.patientId === selectedPatient.id))} 
+                                 className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-900 transition-all shadow-lg"
+                               >
+                                 <Printer className="w-4 h-4" /> Print All Labs
+                               </button>
+                             )}
+                          </div>
                           {labResults.filter(l => l.patientId === selectedPatient.id).length === 0 ? (
                              <div className="py-20 text-center bg-white rounded-[2.5rem] border border-dashed border-slate-200">
                                 <p className="text-slate-400 font-bold text-sm">No laboratory records found.</p>
@@ -874,7 +907,7 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
                                      <h4 className="text-lg font-black text-slate-900 uppercase tracking-tight">{lab.testName}</h4>
                                      <div className="flex gap-2">
                                        <button 
-                                          onClick={() => setPrintingLab(lab)}
+                                          onClick={() => setPrintingLabs([lab])}
                                           className="p-2 bg-slate-100 text-slate-500 rounded-xl hover:bg-slate-200 transition-colors"
                                        >
                                           <Printer className="w-4 h-4" />
@@ -908,6 +941,11 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
            <div className="bg-white rounded-[3rem] p-8 w-full max-w-md relative shadow-2xl animate-in zoom-in-95 duration-200">
               <button onClick={() => setShowAddModal(false)} className="absolute top-6 right-6 p-2 text-slate-400 hover:text-slate-900 transition-colors"><X className="w-5 h-5" /></button>
               <h3 className="text-2xl font-black text-slate-900 mb-8 tracking-tight">Patient Registration</h3>
+              {errorMessage && (
+                <div className="mb-4 p-4 bg-rose-50 border border-rose-100 rounded-2xl text-rose-600 font-bold text-xs flex items-center gap-2 animate-in slide-in-from-top-2">
+                  <AlertCircle className="w-4 h-4" /> {errorMessage}
+                </div>
+              )}
               <form onSubmit={handleAddPatient} className="space-y-4">
                  <div className="space-y-1">
                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Full Name</label>

@@ -57,6 +57,7 @@ interface DataContextType {
   // Sales
   addTransaction: (inv: Invoice, items?: {id:string, quantity:number, currentStock: number}[]) => Promise<boolean>;
   updateInvoiceStatus: (id: string, status: 'Paid' | 'Pending' | 'Partial' | 'Refunded', isRefund?: boolean) => Promise<void>;
+  removeInvoice: (id: string) => Promise<void>;
 
   // Appointments
   addNewAppointment: (a: Appointment) => Promise<void>;
@@ -380,6 +381,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await logAction('UPDATE', 'INVOICE', `Changed status to ${status} for ID: ${id}`);
   };
 
+  const removeInvoice = async (id: string) => {
+    setInvoices(prev => prev.filter(inv => inv.id !== id));
+    try {
+      await firebaseService.deleteInvoice(id);
+      await logAction('DELETE', 'INVOICE', `Removed invoice ID: ${id}`);
+    } catch (e) {
+      console.error("Failed to delete invoice:", e);
+    }
+  };
+
   const addNewAppointment = async (a: Appointment) => {
     await firebaseService.insertAppointment(a);
     await logAction('CREATE', 'APPOINTMENT', `Scheduled visit for ${a.patientName} at ${a.time}`);
@@ -431,7 +442,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <DataContext.Provider value={{
       patients, inventory, clinicalServices, appointments, invoices, expenses, salaries, users, patientHistory, prescriptions, suppliers, labResults, activityLogs,
       refreshData, addNewPatient, updatePat, deletePat, processPatientPayment, addNewHistory, addNewPrescription, removePrescription, addNewLabResult, addNewMedicine, updateMed, deleteMed, 
-      addNewService, removeService, addNewSupplier, updateSupplier, addTransaction, updateInvoiceStatus, addNewAppointment, updateAppointmentStatus, addExpense, addSalary,
+      addNewService, removeService, addNewSupplier, updateSupplier, addTransaction, updateInvoiceStatus, removeInvoice, addNewAppointment, updateAppointmentStatus, addExpense, addSalary,
       addNewUser, removeUser, updateUserProfile, isLoading, isOnline
     }}>
       {children}

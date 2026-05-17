@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { StaffUser, Role } from '../types';
-import { Shield, UserPlus, Trash2, Mail, Lock, User, X, Check, Eye } from 'lucide-react';
+import { Shield, UserPlus, Trash2, Mail, Lock, User, X, Check, Eye, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useData } from '../context/DataContext';
 
 interface Props {
@@ -17,12 +17,18 @@ const UsersView: React.FC<Props> = ({ t, currentUser }) => {
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<Role>('Staff');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !email || !password) return;
     
     setIsLoading(true);
+    setError(null);
+    setSuccessMsg(null);
+
     const newUser: StaffUser = {
       id: Math.random().toString(36).substr(2, 9),
       name,
@@ -37,11 +43,20 @@ const UsersView: React.FC<Props> = ({ t, currentUser }) => {
     setIsLoading(false);
     
     if (result.success) {
-        alert(t('userAdded'));
-        setShowModal(false);
-        setName(''); setEmail(''); setPassword(''); setRole('Staff');
+        setSuccessMsg("User-ka si guul leh ayaa loo abuuray!");
+        setTimeout(() => {
+          setShowModal(false);
+          setSuccessMsg(null);
+          setName(''); setEmail(''); setPassword(''); setRole('Staff');
+        }, 2000);
     } else {
-        alert(t('errorAddingUser') + (result.error ? `: ${result.error}` : ''));
+        if (result.error?.includes('auth/operation-not-allowed')) {
+          setError("Email/Password provider is not enabled in Firebase Console. Fadlan ka shid 'Authentication' tab-ka.");
+        } else if (result.error?.includes('auth/email-already-in-use')) {
+          setError("Email-kan hore ayaa loo isticmaalay.");
+        } else {
+          setError(result.error || "Cilad ayaa dhacday intii user-ka la abuurayay.");
+        }
     }
   };
 
@@ -50,9 +65,8 @@ const UsersView: React.FC<Props> = ({ t, currentUser }) => {
       alert('You cannot delete yourself!');
       return;
     }
-    if (window.confirm('Are you sure you want to delete this user?')) {
-      await removeUser(id);
-    }
+    await removeUser(id);
+    setDeleteConfirm(null);
   };
 
   return (
@@ -75,13 +89,20 @@ const UsersView: React.FC<Props> = ({ t, currentUser }) => {
         {appUsers.map(u => (
           <div key={u.id} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all group relative overflow-hidden">
             <div className="absolute top-0 right-0 p-4">
-              <button 
-                onClick={() => handleDelete(u.id)}
-                disabled={u.id === currentUser?.id}
-                className="p-2 text-slate-300 hover:text-rose-600 transition-colors disabled:opacity-0"
-              >
-                <Trash2 className="w-5 h-5" />
-              </button>
+              {deleteConfirm === u.id ? (
+                <div className="flex items-center gap-1 bg-rose-50 p-1 rounded-2xl border border-rose-100">
+                   <button onClick={() => handleDelete(u.id)} className="px-3 py-1 bg-rose-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-700">Hubi</button>
+                   <button onClick={() => setDeleteConfirm(null)} className="px-3 py-1 text-slate-500 hover:text-slate-700 text-[10px] font-black uppercase tracking-widest">Maya</button>
+                </div>
+              ) : (
+                <button 
+                  onClick={() => setDeleteConfirm(u.id)}
+                  disabled={u.id === currentUser?.id}
+                  className="p-2 text-slate-300 hover:text-rose-600 transition-colors disabled:opacity-0"
+                >
+                  <Trash2 className="w-5 h-5" />
+                </button>
+              )}
             </div>
             <div className="flex items-center gap-4 mb-6">
               <img src={u.avatar} className="w-16 h-16 rounded-2xl bg-slate-50 border border-slate-100 p-1" alt="" />
@@ -156,6 +177,18 @@ const UsersView: React.FC<Props> = ({ t, currentUser }) => {
               <X className="w-5 h-5" />
             </button>
             <h3 className="text-2xl font-black text-slate-900 tracking-tight mb-6">Add New User</h3>
+            {error && (
+              <div className="mb-4 p-4 bg-rose-50 border border-rose-100 rounded-2xl text-rose-600 text-xs font-bold flex items-center gap-3 animate-in slide-in-from-top-2">
+                <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                {error}
+              </div>
+            )}
+            {successMsg && (
+              <div className="mb-4 p-4 bg-emerald-50 border border-emerald-100 rounded-2xl text-emerald-600 text-xs font-bold flex items-center gap-3 animate-in slide-in-from-top-2">
+                <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+                {successMsg}
+              </div>
+            )}
             <form onSubmit={handleAddUser} className="space-y-4">
                <div className="space-y-1">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Full Name</label>
