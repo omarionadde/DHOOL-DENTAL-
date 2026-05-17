@@ -32,7 +32,7 @@ const handleOfflineLogin = (email: string, password: string) => {
     const normalizedEmail = email.toLowerCase().trim();
     
     // Hardcoded Admin Fallback
-    if ((normalizedEmail === 'admin@dhool.com' || normalizedEmail === 'samiiryare23@gmail.com') && password === 'admin123') {
+    if ((normalizedEmail === 'admin@dhool.com' || normalizedEmail === 'samiiryare23@gmail.com') && (password === 'admin123' || password === 'Mohamed@55')) {
         const defaultAdmin: StaffUser = {
             id: 'offline_admin',
             email: normalizedEmail,
@@ -167,7 +167,7 @@ export const firebaseService = {
       // Auto-create admin if not found
       if ((error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') && 
           (normalizedEmail === 'admin@dhool.com' || normalizedEmail === 'samiiryare23@gmail.com') && 
-          password === 'admin123') {
+          (password === 'admin123' || password === 'Mohamed@55')) {
           try {
               const userCredential = await createUserWithEmailAndPassword(auth, email, password);
               const uid = userCredential.user.uid;
