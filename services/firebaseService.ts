@@ -33,16 +33,21 @@ const handleOfflineLogin = (email: string, password: string) => {
     
     // Hardcoded Admin Fallback
     if ((normalizedEmail === 'admin@dhool.com' || normalizedEmail === 'samiiryare23@gmail.com') && (password === 'admin123' || password === 'Mohamed@55')) {
+        const adminId = `offline_admin_${normalizedEmail.split('@')[0]}`;
         const defaultAdmin: StaffUser = {
-            id: 'offline_admin',
+            id: adminId,
             email: normalizedEmail,
             name: 'System Admin (Offline)',
             role: 'Admin',
             status: 'Active',
             avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=DhoolAdmin`
         };
-        if (!localUsers.find(u => u.email === defaultAdmin.email)) {
-            secureStorage.setItem(KEYS.USERS, [...localUsers, defaultAdmin]);
+        
+        // Clean up old 'offline_admin' if it exists without the unique suffix
+        const cleanedUsers = localUsers.filter(u => u.id !== 'offline_admin' && u.id !== adminId);
+        
+        if (!localUsers.find(u => u.id === adminId)) {
+            secureStorage.setItem(KEYS.USERS, [defaultAdmin, ...cleanedUsers]);
         }
         return defaultAdmin;
     }
@@ -53,7 +58,18 @@ const handleOfflineLogin = (email: string, password: string) => {
 const handleLocalFallback = (localKey: string, action: string, payload: any) => {
     let localData = secureStorage.getItem(localKey) || [];
     
-    if (action === 'get') return localData;
+    if (action === 'get') {
+        // Deduplicate locally stored data by ID
+        if (Array.isArray(localData)) {
+            const seen = new Set();
+            return localData.filter((item: any) => {
+                if (!item.id || seen.has(item.id)) return false;
+                seen.add(item.id);
+                return true;
+            });
+        }
+        return localData;
+    }
     
     if (action === 'insert') {
       const newItem = Array.isArray(payload) ? payload[0] : payload;
@@ -108,9 +124,9 @@ const handleRequest = async <T>(
     return data;
   } catch (error: any) {
     console.error(`Firebase Error [${action}]:`, error);
-    if (error.code === 'unavailable' || error.code === 'permission-denied') {
-        // Don't switch to offline mode immediately on permission denied, just return fallback
-        if (error.code === 'unavailable') isDbOffline = true;
+    const offlineCodes = ['unavailable', 'network-request-failed', 'auth/network-request-failed', 'auth/firebase-app-check-token-is-invalid'];
+    if (offlineCodes.includes(error.code) || error.message?.includes('app-check-token')) {
+        isDbOffline = true;
     }
     return handleLocalFallback(localKey, action, payload);
   }
