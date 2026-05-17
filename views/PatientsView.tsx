@@ -32,6 +32,7 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
   
   // Registration State
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Forms
   const [name, setName] = useState('');
@@ -369,6 +370,33 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
                    <p className="text-slate-400 font-bold mt-1 uppercase text-xs tracking-widest">{selectedPatient.age} Years • {selectedPatient.gender || 'Unknown'} • {selectedPatient.phone}</p>
                  </div>
                  <div className="flex items-center gap-3 relative z-10">
+                    {showDeleteConfirm ? (
+                      <div className="flex items-center gap-2 bg-red-600/20 p-1 rounded-2xl border border-red-500/50">
+                        <button 
+                           onClick={() => {
+                               deletePat(selectedPatient.id);
+                               setShowDeleteConfirm(false);
+                               setSelectedPatient(null);
+                           }}
+                           className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg"
+                        >
+                            Hubi (Confirm)
+                        </button>
+                        <button 
+                           onClick={() => setShowDeleteConfirm(false)}
+                           className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                        >
+                            Ka noqo (Cancel)
+                        </button>
+                      </div>
+                    ) : (
+                      <button 
+                         onClick={() => setShowDeleteConfirm(true)}
+                         className="flex items-center gap-2 px-5 py-3 bg-red-600 hover:bg-red-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg"
+                      >
+                          <Trash2 className="w-4 h-4" /> Delete
+                      </button>
+                    )}
                     <button 
                       onClick={() => setShowReportPrint(true)}
                       className="flex items-center gap-2 px-5 py-3 bg-white/10 hover:bg-white/20 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border border-white/10"

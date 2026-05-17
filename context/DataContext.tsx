@@ -275,8 +275,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const deletePat = async (id: string) => {
     const p = patients.find(i => i.id === id);
-    await firebaseService.deletePatient(id);
-    await logAction('DELETE', 'PATIENT', `Removed patient: ${p?.name || id}`);
+    setPatients(prev => prev.filter(patient => patient.id !== id));
+    try {
+      await firebaseService.deletePatient(id);
+      await logAction('DELETE', 'PATIENT', `Removed patient: ${p?.name || id}`);
+    } catch (e) {
+      console.error("Failed to delete patient:", e);
+    }
   };
 
   const processPatientPayment = async (patientId: string, amount: number, method: string) => {
