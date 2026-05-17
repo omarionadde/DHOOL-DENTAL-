@@ -6,6 +6,7 @@ import { Trash2, Printer, Plus, FileText, Pill, X, Save, Clock, ClipboardList, U
 import { getAIAssistance } from '../services/geminiService';
 import { PrescriptionPrint } from '../components/PrescriptionPrint';
 import { PatientReportPrint } from '../components/PatientReportPrint';
+import { LabResultPrint } from '../components/LabResultPrint';
 
 interface Props {
   user: StaffUser;
@@ -26,6 +27,7 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [printingRx, setPrintingRx] = useState<Prescription | null>(null);
   const [showReportPrint, setShowReportPrint] = useState(false);
+  const [printingLab, setPrintingLab] = useState<LabResult | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   
   // Registration State
@@ -269,6 +271,15 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
           prescription={printingRx} 
           patient={selectedPatient} 
           onClose={() => setPrintingRx(null)} 
+        />
+      )}
+
+      {/* Lab Printing Modal */}
+      {printingLab && selectedPatient && (
+        <LabResultPrint 
+          labResult={printingLab} 
+          patient={selectedPatient} 
+          onClose={() => setPrintingLab(null)} 
         />
       )}
 
@@ -833,10 +844,18 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
                                <div key={lab.id} className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 hover:border-blue-100 transition-all">
                                   <div className="flex justify-between items-center mb-4">
                                      <h4 className="text-lg font-black text-slate-900 uppercase tracking-tight">{lab.testName}</h4>
-                                     <span className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest ${
-                                       lab.status === 'Critical' ? 'bg-rose-50 text-rose-600 border border-rose-100' : 
-                                       lab.status === 'Abnormal' ? 'bg-amber-50 text-amber-600 border border-amber-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
-                                     }`}>{lab.status}</span>
+                                     <div className="flex gap-2">
+                                       <button 
+                                          onClick={() => setPrintingLab(lab)}
+                                          className="p-2 bg-slate-100 text-slate-500 rounded-xl hover:bg-slate-200 transition-colors"
+                                       >
+                                          <Printer className="w-4 h-4" />
+                                       </button>
+                                       <span className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest ${
+                                         lab.status === 'Critical' ? 'bg-rose-50 text-rose-600 border border-rose-100' : 
+                                         lab.status === 'Abnormal' ? 'bg-amber-50 text-amber-600 border border-amber-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                                       }`}>{lab.status}</span>
+                                     </div>
                                   </div>
                                   <div className="p-4 bg-slate-50 rounded-2xl mb-4">
                                      <p className="text-sm font-bold text-slate-700 leading-relaxed italic">"{lab.result}"</p>

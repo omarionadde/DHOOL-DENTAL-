@@ -15,6 +15,7 @@ import POSView from './views/POSView';
 import BillingView from './views/BillingView';
 import ExpensesView from './views/ExpensesView';
 import SalariesView from './views/SalariesView';
+import DebtManagementView from './views/DebtManagementView';
 import UsersView from './views/UsersView';
 import ReportsView from './views/ReportsView';
 import TreasuryView from './views/TreasuryView';
@@ -106,6 +107,7 @@ const AppContent: React.FC = () => {
         treasury: 'Qasnadda (Treasury)',
         reports: 'Warbixinnada',
         settings: 'Settings',
+        debts: 'Maamulka Deymaha',
         admin: 'User-ada',
         logout: 'Ka Bax',
         queue: 'Qolka Sugitaanka'
@@ -128,6 +130,7 @@ const AppContent: React.FC = () => {
         treasury: 'Treasury & Accounts',
         reports: 'Reports',
         settings: 'Settings',
+        debts: 'Debt Management',
         admin: 'Users',
         logout: 'Logout',
         queue: 'Waiting Queue'
@@ -199,6 +202,7 @@ const AppContent: React.FC = () => {
               <SubNavItem to="/treasury" label={t('treasury')} active={location.pathname === '/treasury'} />
               <SubNavItem to="/expenses" label={t('expenses')} active={location.pathname === '/expenses'} />
               <SubNavItem to="/salaries" label={t('payroll')} active={location.pathname === '/salaries'} />
+              <SubNavItem to="/debts" label={t('debts')} active={location.pathname === '/debts'} />
             </NavGroup>
           )}
 
@@ -244,6 +248,7 @@ const AppContent: React.FC = () => {
              <Route path="/pharmacy" element={<PharmacyView />} />
              <Route path="/suppliers" element={<SuppliersView />} />
              <Route path="/invoices" element={<BillingView user={currentUser} />} />
+             <Route path="/debts" element={<DebtManagementView />} />
              <Route path="/expenses" element={<ExpensesView />} />
              <Route path="/salaries" element={<SalariesView />} />
              <Route path="/treasury" element={<TreasuryView />} />

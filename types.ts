@@ -167,4 +167,5 @@ export type ViewType =
   | 'reports'
   | 'treasury'
   | 'suppliers'
-  | 'settings';
+  | 'settings'
+  | 'debts';
