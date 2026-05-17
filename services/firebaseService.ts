@@ -255,7 +255,7 @@ export const firebaseService = {
     try {
         const secondaryApp = initializeApp(firebaseConfig, "SecondaryApp");
         const secondaryAuth = getAuth(secondaryApp);
-        const secondaryDb = getFirestore(secondaryApp);
+        const secondaryDb = getFirestore(secondaryApp, (firebaseConfig as any).firestoreDatabaseId || '(default)');
         
         let uid = user.id;
         const normalizedEmail = user.email.toLowerCase().trim();
