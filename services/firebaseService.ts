@@ -255,7 +255,6 @@ export const firebaseService = {
     try {
         const secondaryApp = initializeApp(firebaseConfig, "SecondaryApp");
         const secondaryAuth = getAuth(secondaryApp);
-        const secondaryDb = getFirestore(secondaryApp, (firebaseConfig as any).firestoreDatabaseId || '(default)');
         
         let uid = user.id;
         const normalizedEmail = user.email.toLowerCase().trim();
@@ -263,10 +262,9 @@ export const firebaseService = {
             const userCredential = await createUserWithEmailAndPassword(secondaryAuth, normalizedEmail, user.password || 'dhool123');
             uid = userCredential.user.uid;
             
-            // Write to Firestore using the secondary app (authenticated as the new user)
-            // This bypasses "only admin can write" restrictions if the rule is "user can write own doc"
+            // Write to Firestore using the primary app (admin authenticated)
             const userWithUid = { ...user, id: uid, email: normalizedEmail };
-            await setDoc(doc(secondaryDb, "users", uid), userWithUid);
+            await setDoc(doc(db, "users", uid), userWithUid);
             
             await signOut(secondaryAuth);
             
