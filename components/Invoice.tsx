@@ -56,7 +56,14 @@ export const Invoice: React.FC<InvoiceProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 z-[60] flex items-center justify-center p-4 backdrop-blur-sm print:bg-white print:p-0 print:static">
-      <div className="bg-white w-full max-w-4xl h-[90vh] md:h-auto md:max-h-[90vh] rounded-3xl shadow-2xl overflow-hidden print:shadow-none print:w-full print:max-w-none print:h-auto flex flex-col">
+      <style type="text/css" media="print">
+        {`
+          @page { size: A4; margin: 10mm; }
+          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .print-full-page { width: 100%; height: 100%; }
+        `}
+      </style>
+      <div className="bg-white w-full max-w-4xl h-[90vh] md:h-auto md:max-h-[90vh] rounded-3xl shadow-2xl overflow-hidden print:shadow-none print:w-full print:max-w-none print:h-auto flex flex-col print-full-page">
         
         {/* Document Header Controls (Hidden on print) */}
         <div className="p-4 bg-gray-50 border-b flex justify-between items-center print:hidden">
