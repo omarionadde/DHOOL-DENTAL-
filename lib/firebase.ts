@@ -1,29 +1,15 @@
-import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
+import { initializeApp, getApps, deleteApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
-import firebaseConfig from '../firebase-applet-config.json';
+import { initializeFirestore, getFirestore } from "firebase/firestore";
+import { getAuth } from "firebase/auth";
+import firebaseConfig from "../firebase-applet-config.json";
 
-// Initialize Firebase using the modular SDK pattern
-export const app = initializeApp(firebaseConfig);
+console.log("Initializing Firebase with project:", (firebaseConfig as any).projectId);
+
+const app = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
+
+export const analytics = getAnalytics(app);
+export const db = initializeFirestore(app, { experimentalForceLongPolling: true });
+console.log("Firestore initialized with DB id:", app.options.projectId);
 export const auth = getAuth(app);
-
-// Use initializeFirestore with persistence for "1 second" speeds and offline support
-export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({
-    tabManager: persistentMultipleTabManager()
-  }),
-  experimentalForceLongPolling: true, // Reliable in sandboxed environments
-});
-
-// Initialize Analytics safely
-let analytics;
-try {
-  if (typeof window !== "undefined") {
-    analytics = getAnalytics(app);
-  }
-} catch (e) {
-  console.warn("Firebase Analytics failed to initialize:", e);
-}
-export { analytics };
 export { firebaseConfig };

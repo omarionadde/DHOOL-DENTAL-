@@ -10,8 +10,9 @@ interface Props {
 }
 
 const UsersView: React.FC<Props> = ({ t, currentUser }) => {
-  const { users: appUsers, addNewUser, removeUser } = useData();
+  const { users: appUsers, addNewUser, removeUser, updateUserProfile } = useData();
   const [showModal, setShowModal] = useState(false);
+  const [editingUser, setEditingUser] = useState<StaffUser | null>(null);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -21,41 +22,66 @@ const UsersView: React.FC<Props> = ({ t, currentUser }) => {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
-  const handleAddUser = async (e: React.FormEvent) => {
+  const handleOpenEdit = (u: StaffUser) => {
+    setEditingUser(u);
+    setName(u.name);
+    setEmail(u.email);
+    setRole(u.role);
+    setPassword('');
+    setShowModal(true);
+  };
+
+  const handleAction = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !email || !password) return;
+    if (!name || !email || (!editingUser && !password)) return;
     
     setIsLoading(true);
     setError(null);
     setSuccessMsg(null);
 
-    const newUser: StaffUser = {
-      id: Math.random().toString(36).substr(2, 9),
-      name,
-      email,
-      password,
-      role,
-      status: 'Active',
-      avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${name.replace(/\s/g, '')}`
-    };
-    
-    const result = await addNewUser(newUser);
-    setIsLoading(false);
-    
-    if (result.success) {
-        setSuccessMsg("User-ka si guul leh ayaa loo abuuray!");
-        setTimeout(() => {
-          setShowModal(false);
-          setSuccessMsg(null);
-          setName(''); setEmail(''); setPassword(''); setRole('Staff');
-        }, 2000);
-    } else {
-        if (result.error?.includes('auth/operation-not-allowed')) {
-          setError("Email/Password provider is not enabled in Firebase Console. Fadlan ka shid 'Authentication' tab-ka.");
-        } else if (result.error?.includes('auth/email-already-in-use')) {
-          setError("Email-kan hore ayaa loo isticmaalay.");
+    if (editingUser) {
+        const updates: Partial<StaffUser> = {
+            name,
+            email,
+            role
+        };
+        // Only update password if provided
+        const result = await updateUserProfile(editingUser.id, updates);
+        setIsLoading(false);
+        if (result.success) {
+            setSuccessMsg("User-ka xogtiisa waa la cusboonaysiiyay!");
+            setTimeout(() => {
+                setShowModal(false);
+                setEditingUser(null);
+                setSuccessMsg(null);
+                setName(''); setEmail(''); setPassword(''); setRole('Staff');
+            }, 1500);
         } else {
-          setError(result.error || "Cilad ayaa dhacday intii user-ka la abuurayay.");
+            setError(result.error || "Cilad ayaa dhacday intii la cusboonaysiinayay.");
+        }
+    } else {
+        const newUser: StaffUser = {
+            id: Math.random().toString(36).substr(2, 9),
+            name,
+            email,
+            password,
+            role,
+            status: 'Active',
+            avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${name.replace(/\s/g, '')}`
+        };
+        
+        const result = await addNewUser(newUser);
+        setIsLoading(false);
+        
+        if (result.success) {
+            setSuccessMsg("User-ka si guul leh ayaa loo abuuray!");
+            setTimeout(() => {
+                setShowModal(false);
+                setSuccessMsg(null);
+                setName(''); setEmail(''); setPassword(''); setRole('Staff');
+            }, 2000);
+        } else {
+            setError(result.error || "Cilad ayaa dhacday intii user-ka la abuurayay.");
         }
     }
   };
@@ -76,7 +102,21 @@ const UsersView: React.FC<Props> = ({ t, currentUser }) => {
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">{t('admin')}</h1>
           <p className="text-slate-500 font-medium">Manage clinical staff and access permissions.</p>
         </div>
-        <button 
+          <button 
+           onClick={async () => {
+             if (appUsers.length > 0) {
+               await updateUserProfile(appUsers[0].id, { role: 'Admin' });
+               alert(`${appUsers[0].name} is now an Admin!`);
+             } else {
+               alert('No users found.');
+             }
+           }}
+           className="bg-purple-600 text-white px-6 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-purple-600/20 hover:bg-purple-700 transition-all flex items-center gap-2"
+         >
+           <Shield className="w-4 h-4" />
+           Make First Admin
+         </button>
+         <button 
           onClick={() => setShowModal(true)}
           className="bg-blue-600 text-white px-6 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-blue-600/20 hover:bg-blue-700 transition-all flex items-center gap-2"
         >
@@ -88,7 +128,26 @@ const UsersView: React.FC<Props> = ({ t, currentUser }) => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {appUsers.map(u => (
           <div key={u.id} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all group relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-4">
+            <div className="absolute top-0 right-0 p-4 flex gap-2">
+              <button 
+                onClick={() => handleOpenEdit(u)}
+                className="p-2 text-slate-300 hover:text-blue-600 transition-colors"
+                title="Edit User"
+              >
+                <Lock className="w-5 h-5" />
+              </button>
+              {u.role !== 'Admin' && (
+                <button 
+                  onClick={async () => {
+                    await updateUserProfile(u.id, { role: 'Admin' });
+                    alert(`Promoted ${u.name} to Admin!`);
+                  }}
+                  className="p-2 text-slate-300 hover:text-purple-600 transition-colors"
+                  title="Promote to Admin"
+                >
+                  <Shield className="w-5 h-5" />
+                </button>
+              )}
               {deleteConfirm === u.id ? (
                 <div className="flex items-center gap-1 bg-rose-50 p-1 rounded-2xl border border-rose-100">
                    <button onClick={() => handleDelete(u.id)} className="px-3 py-1 bg-rose-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-700">Hubi</button>
@@ -173,10 +232,19 @@ const UsersView: React.FC<Props> = ({ t, currentUser }) => {
        {showModal && (
         <div className="fixed inset-0 bg-slate-900/60 z-[100] flex items-center justify-center p-4 backdrop-blur-md animate-in fade-in duration-300">
           <div className="bg-white rounded-[2.5rem] p-8 w-full max-w-md shadow-2xl relative overflow-hidden">
-            <button onClick={() => setShowModal(false)} className="absolute top-6 right-6 p-2 text-slate-400 hover:text-slate-900 transition-colors">
+            <button 
+              onClick={() => {
+                setEditingUser(null);
+                setName(''); setEmail(''); setPassword(''); setRole('Staff');
+                setShowModal(false);
+              }} 
+              className="absolute top-6 right-6 p-2 text-slate-400 hover:text-slate-900 transition-colors"
+            >
               <X className="w-5 h-5" />
             </button>
-            <h3 className="text-2xl font-black text-slate-900 tracking-tight mb-6">Add New User</h3>
+            <h3 className="text-2xl font-black text-slate-900 tracking-tight mb-6">
+              {editingUser ? 'Edit User Role' : 'Add New User'}
+            </h3>
             {error && (
               <div className="mb-4 p-4 bg-rose-50 border border-rose-100 rounded-2xl text-rose-600 text-xs font-bold flex items-center gap-3 animate-in slide-in-from-top-2">
                 <AlertCircle className="w-5 h-5 flex-shrink-0" />
@@ -189,7 +257,7 @@ const UsersView: React.FC<Props> = ({ t, currentUser }) => {
                 {successMsg}
               </div>
             )}
-            <form onSubmit={handleAddUser} className="space-y-4">
+            <form onSubmit={handleAction} className="space-y-4">
                <div className="space-y-1">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Full Name</label>
                   <div className="relative">
@@ -204,13 +272,15 @@ const UsersView: React.FC<Props> = ({ t, currentUser }) => {
                     <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                   </div>
                </div>
-               <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Password</label>
-                  <div className="relative">
-                    <input required type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full pl-12 pr-4 py-4 bg-slate-50 rounded-2xl outline-none font-bold text-sm" placeholder="••••••••" />
-                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                  </div>
-               </div>
+               {!editingUser && (
+                <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Password</label>
+                    <div className="relative">
+                      <input required type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full pl-12 pr-4 py-4 bg-slate-50 rounded-2xl outline-none font-bold text-sm" placeholder="••••••••" />
+                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                    </div>
+                </div>
+               )}
                <div className="space-y-1">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Role</label>
                   <div className="relative">
@@ -224,7 +294,7 @@ const UsersView: React.FC<Props> = ({ t, currentUser }) => {
                   </div>
                </div>
                <button type="submit" disabled={isLoading} className="w-full py-4 bg-blue-600 text-white font-black rounded-2xl uppercase tracking-widest text-[10px] hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/20 mt-4 disabled:opacity-50">
-                  {isLoading ? 'Creating...' : 'Create User Account'}
+                  {isLoading ? 'Processing...' : (editingUser ? 'Update User Role' : 'Create User Account')}
                </button>
             </form>
           </div>

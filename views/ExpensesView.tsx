@@ -5,14 +5,14 @@ import { Expense } from '../types';
 import { useData } from '../context/DataContext';
 
 const ExpensesView: React.FC = () => {
-  const { expenses, addExpense } = useData();
+  const { expenses, addExpense, removeExpense } = useData();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newExp, setNewExp] = useState({ description: '', category: 'Other', amount: '', date: new Date().toISOString().split('T')[0] });
 
-  // Currently DataContext doesn't have deleteExpense, assuming add-only or simplified for this example
-  const handleDelete = (id: string) => {
-    // Implement delete in context if needed, just alerting for now
-    alert('Deletion restricted in demo mode.');
+  const handleDelete = async (id: string) => {
+    if (window.confirm('Are you sure you want to delete this expense?')) {
+      await removeExpense(id);
+    }
   };
 
   const handleAdd = async (e: React.FormEvent) => {
@@ -39,9 +39,14 @@ const ExpensesView: React.FC = () => {
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">Expense Tracking</h1>
           <p className="text-slate-500 font-medium">Manage operational costs and clinic overheads.</p>
         </div>
-        <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 px-6 py-3 bg-rose-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-rose-700 transition-all shadow-xl shadow-rose-600/20">
-          <Plus className="w-4 h-4" /> Add Expense
-        </button>
+        <div className="flex gap-4">
+          <button onClick={() => window.print()} className="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-slate-800 transition-all shadow-xl shadow-slate-900/20">
+            <span className="print:hidden">🖨️</span> Print
+          </button>
+          <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 px-6 py-3 bg-rose-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-rose-700 transition-all shadow-xl shadow-rose-600/20">
+            <Plus className="w-4 h-4" /> Add Expense
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -59,27 +64,31 @@ const ExpensesView: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-white rounded-[2.5rem] border border-slate-200 overflow-hidden shadow-sm">
+      <div className="bg-white rounded-[2.5rem] border border-slate-200 overflow-hidden shadow-sm print:shadow-none print:border-none print:rounded-none mt-8">
+        <div className="hidden print:block text-center mb-8">
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Expense Report</h1>
+          <p className="text-slate-500 font-medium">{new Date().toLocaleDateString()}</p>
+        </div>
         <table className="w-full text-left">
-          <thead className="bg-slate-50 text-slate-500 text-[10px] font-black uppercase tracking-widest">
+          <thead className="bg-slate-50 text-slate-500 text-[10px] font-black uppercase tracking-widest print:bg-transparent">
             <tr>
-              <th className="px-8 py-5">Description</th>
-              <th className="px-8 py-5">Category</th>
-              <th className="px-8 py-5">Date</th>
-              <th className="px-8 py-5">Amount</th>
-              <th className="px-8 py-5 text-right">Actions</th>
+              <th className="px-8 py-5 print:px-2">Description</th>
+              <th className="px-8 py-5 print:px-2">Category</th>
+              <th className="px-8 py-5 print:px-2">Date</th>
+              <th className="px-8 py-5 print:px-2">Amount</th>
+              <th className="px-8 py-5 text-right print:hidden">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-slate-100 print:divide-slate-200">
             {expenses.map((e) => (
-              <tr key={e.id} className="hover:bg-slate-50 transition-colors">
-                <td className="px-8 py-4 font-black text-slate-900">{e.description}</td>
-                <td className="px-8 py-4">
-                  <span className="px-3 py-1.5 bg-slate-100 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest">{e.category}</span>
+              <tr key={e.id} className="hover:bg-slate-50 transition-colors print:hover:bg-transparent">
+                <td className="px-8 py-4 font-black text-slate-900 print:px-2">{e.description}</td>
+                <td className="px-8 py-4 print:px-2">
+                  <span className="px-3 py-1.5 bg-slate-100 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest print:bg-transparent print:p-0">{e.category}</span>
                 </td>
-                <td className="px-8 py-4 text-xs font-bold text-slate-500 tracking-tight">{e.date}</td>
-                <td className="px-8 py-4 font-black text-rose-600">-${e.amount.toFixed(2)}</td>
-                <td className="px-8 py-4 text-right">
+                <td className="px-8 py-4 text-xs font-bold text-slate-500 tracking-tight print:px-2">{e.date}</td>
+                <td className="px-8 py-4 font-black text-rose-600 print:px-2">-${e.amount.toFixed(2)}</td>
+                <td className="px-8 py-4 text-right print:hidden">
                   <button onClick={() => handleDelete(e.id)} className="p-3 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all">
                     <Trash2 className="w-5 h-5" />
                   </button>

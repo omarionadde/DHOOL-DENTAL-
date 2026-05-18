@@ -4,8 +4,9 @@ import { HashRouter as Router, Routes, Route, Link, useLocation, useNavigate } f
 import { 
   LayoutDashboard, Users, Calendar, Menu, ChevronDown, ChevronRight,
   Receipt, Wallet, BarChart3, ShoppingCart, 
-  Settings as SettingsIcon, LogOut, Shield, Stethoscope, Briefcase, Truck, ClipboardList, Clock
+  Settings as SettingsIcon, LogOut, Shield, Stethoscope, Briefcase, Truck, ClipboardList, Clock, RefreshCw, Database
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { StaffUser, ViewType } from './types';
 import DashboardView from './views/DashboardView';
 import PatientsView from './views/PatientsView';
@@ -41,7 +42,7 @@ const AppContent: React.FC = () => {
   const [currency, setCurrency] = useState('$');
   const [dateFormat, setDateFormat] = useState('DD/MM/YYYY');
   
-  const { updateUserProfile } = useData(); 
+  const { updateUserProfile, isOnline, isLoading } = useData(); 
 
   useEffect(() => {
     try {
@@ -63,6 +64,11 @@ const AppContent: React.FC = () => {
           setCurrentUser(user);
           // Save session securely
           secureStorage.setItem('dhool_user', user);
+          
+          // Debugging: Log all users
+          const allUsers = await firebaseService.getUsers();
+          console.log("All users in Firestore:", allUsers);
+
           return true;
         }
     } catch (e) {
@@ -228,6 +234,18 @@ const AppContent: React.FC = () => {
             <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-slate-50 rounded-lg text-slate-400"><Menu className="w-5 h-5" /></button>
           </div>
           <div className="flex items-center gap-6">
+            {isLoading && (
+              <div className="flex items-center gap-2 text-blue-500 animate-pulse">
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                <span className="text-[10px] font-black uppercase tracking-widest hidden md:block">Syncing...</span>
+              </div>
+            )}
+            {!isLoading && isOnline && (
+              <div className="flex items-center gap-2 text-emerald-500">
+                <Database className="w-4 h-4" />
+                <span className="text-[10px] font-black uppercase tracking-widest hidden md:block">Online</span>
+              </div>
+            )}
             <div className="text-right hidden sm:block">
               <p className="text-xs font-black text-slate-900">{currentUser.name}</p>
               <p className="text-[10px] text-blue-500 font-bold uppercase tracking-widest">{currentUser.role}</p>
@@ -237,43 +255,53 @@ const AppContent: React.FC = () => {
         </header>
 
         <section className="flex-1 overflow-y-auto p-8 bg-[#f8fafc]">
-          <Routes>
-             <Route path="/" element={<DashboardView />} />
-             <Route path="/queue" element={<QueueView />} />
-             <Route path="/pos" element={<POSView mode="pos" currency={currency} t={t} />} />
-             <Route path="/services" element={<POSView mode="services" currency={currency} t={t} />} />
-             <Route path="/clinical-management" element={<ClinicalServicesView />} />
-             <Route path="/patients" element={<PatientsView user={currentUser} t={t} />} />
-             <Route path="/appointments" element={<AppointmentsView />} />
-             <Route path="/pharmacy" element={<PharmacyView />} />
-             <Route path="/suppliers" element={<SuppliersView />} />
-             <Route path="/invoices" element={<BillingView user={currentUser} />} />
-             <Route path="/debts" element={<DebtManagementView />} />
-             <Route path="/expenses" element={<ExpensesView />} />
-             <Route path="/salaries" element={<SalariesView />} />
-             <Route path="/treasury" element={<TreasuryView />} />
-             <Route path="/reports" element={<ReportsView />} />
-             <Route path="/users" element={<UsersView t={t} currentUser={currentUser} />} />
-             <Route path="/settings" element={<SettingsView 
-                  user={currentUser} 
-                  language={language} setLanguage={(l) => { setLanguage(l); localStorage.setItem('dhool_lang', l); }} 
-                  currency={currency} setCurrency={setCurrency} 
-                  dateFormat={dateFormat} setDateFormat={setDateFormat} 
-                  t={t} 
-                  updateCurrentUser={async (name: string, password?: string) => {
-                     if (!currentUser) return { success: false, error: 'No user' };
-                     const updates: any = { name };
-                     if (password) updates.password = password;
-                     const updated = await updateUserProfile(currentUser.id, updates);
-                     if (updated) {
-                        setCurrentUser(updated); 
-                        secureStorage.setItem('dhool_user', updated);
-                        return { success: true };
-                     }
-                     return { success: false, error: 'Update failed' };
-                  }}
-             />} />
-          </Routes>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={location.pathname}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.3 }}
+            >
+              <Routes location={location} key={location.pathname}>
+                 <Route path="/" element={<DashboardView />} />
+                 <Route path="/queue" element={<QueueView />} />
+                 <Route path="/pos" element={<POSView mode="pos" currency={currency} t={t} />} />
+                 <Route path="/services" element={<POSView mode="services" currency={currency} t={t} />} />
+                 <Route path="/clinical-management" element={<ClinicalServicesView />} />
+                 <Route path="/patients" element={<PatientsView user={currentUser} t={t} />} />
+                 <Route path="/appointments" element={<AppointmentsView />} />
+                 <Route path="/pharmacy" element={<PharmacyView />} />
+                 <Route path="/suppliers" element={<SuppliersView />} />
+                 <Route path="/invoices" element={<BillingView user={currentUser} />} />
+                 <Route path="/debts" element={<DebtManagementView />} />
+                 <Route path="/expenses" element={<ExpensesView />} />
+                 <Route path="/salaries" element={<SalariesView />} />
+                 <Route path="/treasury" element={<TreasuryView />} />
+                 <Route path="/reports" element={<ReportsView />} />
+                 <Route path="/users" element={<UsersView t={t} currentUser={currentUser} />} />
+                 <Route path="/settings" element={<SettingsView 
+                      user={currentUser} 
+                      language={language} setLanguage={(l) => { setLanguage(l); localStorage.setItem('dhool_lang', l); }} 
+                      currency={currency} setCurrency={setCurrency} 
+                      dateFormat={dateFormat} setDateFormat={setDateFormat} 
+                      t={t} 
+                      updateCurrentUser={async (name: string, password?: string) => {
+                         if (!currentUser) return { success: false, error: 'No user' };
+                         const updates: any = { name };
+                         if (password) updates.password = password;
+                         const updated = await updateUserProfile(currentUser.id, updates);
+                         if (updated) {
+                            setCurrentUser(updated); 
+                            secureStorage.setItem('dhool_user', updated);
+                            return { success: true };
+                         }
+                         return { success: false, error: 'Update failed' };
+                      }}
+                 />} />
+              </Routes>
+            </motion.div>
+          </AnimatePresence>
         </section>
       </main>
     </div>

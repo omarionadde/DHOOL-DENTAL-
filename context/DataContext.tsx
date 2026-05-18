@@ -65,6 +65,7 @@ interface DataContextType {
   
   // Finance
   addExpense: (e: Expense) => Promise<void>;
+  removeExpense: (id: string) => Promise<void>;
   addSalary: (s: Salary) => Promise<void>;
   
   // User Management
@@ -421,6 +422,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     logAction('CREATE', 'EXPENSE', `Recorded expense: ${e.description} ($${e.amount})`);
   };
 
+  const removeExpense = async (id: string) => {
+    setExpenses(prev => prev.filter(e => e.id !== id));
+    try {
+      await firebaseService.deleteExpense(id);
+      logAction('DELETE', 'EXPENSE', `Removed expense ID: ${id}`);
+    } catch (e) {
+      console.error("Failed to delete expense:", e);
+    }
+  };
+
   const addSalary = async (s: Salary) => {
     setSalaries(prev => [s, ...prev.filter(i => i.id !== s.id)]);
     firebaseService.insertSalary(s);
@@ -462,7 +473,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <DataContext.Provider value={{
       patients, inventory, clinicalServices, appointments, invoices, expenses, salaries, users, patientHistory, prescriptions, suppliers, labResults, activityLogs,
       refreshData, addNewPatient, updatePat, deletePat, processPatientPayment, addNewHistory, addNewPrescription, removePrescription, addNewLabResult, addNewMedicine, updateMed, deleteMed, 
-      addNewService, removeService, addNewSupplier, updateSupplier, addTransaction, updateInvoiceStatus, removeInvoice, addNewAppointment, updateAppointmentStatus, addExpense, addSalary,
+      addNewService, removeService, addNewSupplier, updateSupplier, addTransaction, updateInvoiceStatus, removeInvoice, addNewAppointment, updateAppointmentStatus, addExpense, removeExpense, addSalary,
       addNewUser, removeUser, updateUserProfile, isLoading, isOnline
     }}>
       {children}

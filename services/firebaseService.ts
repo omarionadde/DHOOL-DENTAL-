@@ -27,34 +27,6 @@ const KEYS = {
 
 let isDbOffline = false;
 
-const handleOfflineLogin = (email: string, password: string) => {
-    const localUsers: StaffUser[] = secureStorage.getItem(KEYS.USERS) || [];
-    const normalizedEmail = email.toLowerCase().trim();
-    
-    // Hardcoded Admin Fallback
-    if ((normalizedEmail === 'admin@dhool.com' || normalizedEmail === 'samiiryare23@gmail.com') && (password === 'admin123' || password === 'Mohamed@55')) {
-        const adminId = `offline_admin_${normalizedEmail.split('@')[0]}`;
-        const defaultAdmin: StaffUser = {
-            id: adminId,
-            email: normalizedEmail,
-            name: 'System Admin (Offline)',
-            role: 'Admin',
-            status: 'Active',
-            avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=DhoolAdmin`
-        };
-        
-        // Clean up old 'offline_admin' if it exists without the unique suffix
-        const cleanedUsers = localUsers.filter(u => u.id !== 'offline_admin' && u.id !== adminId);
-        
-        if (!localUsers.find(u => u.id === adminId)) {
-            secureStorage.setItem(KEYS.USERS, [defaultAdmin, ...cleanedUsers]);
-        }
-        return defaultAdmin;
-    }
-
-    return localUsers.find(u => u.email.toLowerCase() === normalizedEmail && (u.password === password || !u.password)) || null;
-};
-
 const handleLocalFallback = (localKey: string, action: string, payload: any) => {
     let localData = secureStorage.getItem(localKey) || [];
     
@@ -99,13 +71,10 @@ const handleRequest = async <T>(
   action: 'get' | 'insert' | 'update' | 'delete',
   payload?: any
 ): Promise<T | any> => {
-  if (isDbOffline) return handleLocalFallback(localKey, action, payload);
-
   try {
     const data = await operation();
     // Update local storage for cache - but don't let it block
     try {
-        const currentLocal = secureStorage.getItem(localKey) || [];
         if (action === 'get' && Array.isArray(data)) {
            secureStorage.setItem(localKey, data);
         } else {
@@ -114,10 +83,8 @@ const handleRequest = async <T>(
     } catch (e) {}
     return data;
   } catch (error: any) {
-    if (action === 'get') {
-        return handleLocalFallback(localKey, action, payload);
-    }
-    // For writes, we let it fail or handled by the caller, but still try local fallback to keep UI moving
+    console.warn(`Firebase Action [${action}] failed for ${localKey}:`, error.message);
+    // Silent fallback to local data if network fails
     return handleLocalFallback(localKey, action, payload);
   }
 };
@@ -129,129 +96,74 @@ export const firebaseService = {
     if (!password) return null;
     const normalizedEmail = email.toLowerCase().trim();
 
-    if (isDbOffline) return handleOfflineLogin(normalizedEmail, password);
-
     try {
+      // Step 1: Attempt Firebase Auth Login
+      console.log("Attempting auth login for:", email);
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const uid = userCredential.user.uid;
+      console.log("Auth login successful. UID:", userCredential.user.uid);
 
+      const uid = userCredential.user.uid;
       let userData: StaffUser | null = null;
       
       try {
-        // Fetch profile by UID (primary)
+        // Step 2: Fetch profile from Firestore
+        console.log("Fetching profile for UID:", uid);
         const userDoc = await getDoc(doc(db, "users", uid));
         
         if (userDoc.exists()) {
-          const remoteData = userDoc.data();
-          userData = { ...remoteData, id: uid } as StaffUser;
+          console.log("User profile found. Data:", JSON.stringify(userDoc.data()));
+          userData = { ...userDoc.data(), id: uid } as StaffUser;
           
-          // Re-enforce admin role if it's one of the special emails but Firestore says otherwise
-          if ((normalizedEmail === 'admin@dhool.com' || normalizedEmail === 'samiiryare23@gmail.com') && userData.role !== 'Admin') {
+          const isAdminEmail = userData.email === 'admin@dhool.com' || userData.email === 'samiiryare23@gmail.com';
+          if (isAdminEmail && userData.role !== 'Admin') {
+            console.log("Promoting primary admin to Admin role.");
             userData.role = 'Admin';
             await updateDoc(doc(db, "users", uid), { role: 'Admin' });
           }
         } else {
-          // If doc doesn't exist by UID, try query by email (secondary)
+          console.log("User profile not found in UID doc.");
+          // If doc doesn't exist by UID, try query by email
           const emailQuerySnapshot = await getDocs(query(collection(db, "users"), where("email", "==", normalizedEmail), limit(1)));
           if (!emailQuerySnapshot.empty) {
+            console.log("User profile found by email.");
             userData = { ...emailQuerySnapshot.docs[0].data(), id: emailQuerySnapshot.docs[0].id } as StaffUser;
-            // Fix role if needed
-            if ((normalizedEmail === 'admin@dhool.com' || normalizedEmail === 'samiiryare23@gmail.com') && userData.role !== 'Admin') {
-                userData.role = 'Admin';
-                await updateDoc(doc(db, "users", userData.id), { role: 'Admin' });
-            }
+          } else {
+             console.log("User profile not found. Creating new.");
+             // Create new user profile if not in Firestore
+             const usersSnapshot = await getDocs(query(collection(db, "users"), limit(1)));
+             const role = usersSnapshot.empty ? 'Admin' : 'Staff';                
+             userData = { 
+               id: uid, 
+               email: normalizedEmail,
+               role: role,
+               status: 'Active',
+               avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${uid}`,
+               name: normalizedEmail.split('@')[0]
+             } as StaffUser;
+             await setDoc(doc(db, "users", uid), userData);
+             console.log("New user profile created.");
           }
         }
       } catch (dbError: any) {
-        console.warn("Firestore error during login profile fetch:", dbError);
-        
-        // If it's a special admin account, prioritize giving them Admin role even if DB fails
-        if (normalizedEmail === 'admin@dhool.com' || normalizedEmail === 'samiiryare23@gmail.com') {
-          return {
-            id: uid,
-            email: normalizedEmail,
-            name: normalizedEmail === 'samiiryare23@gmail.com' ? 'Primary Admin' : 'System Admin',
-            role: 'Admin',
-            status: 'Active',
-            avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=Admin`
-          };
-        }
-
-        // Try local fallback
-        const localUser = handleOfflineLogin(normalizedEmail, password);
-        if (localUser) return localUser;
-        
-        // Final fallback: check local users cache for the actual role
-        const cachedUsers: StaffUser[] = secureStorage.getItem(KEYS.USERS) || [];
-        const cachedMatch = cachedUsers.find(u => u.email.toLowerCase() === normalizedEmail);
-        if (cachedMatch) return cachedMatch;
-
-        // Last resort
-        return { 
+        console.error("Firestore operation failed in login (gracefully continuing):", dbError);
+        // Create a fallback basic user profile to allow login
+        userData = { 
           id: uid, 
-          role: 'Staff', 
+          email: normalizedEmail,
+          role: 'Staff',
           status: 'Active',
           avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${uid}`,
-          ...cachedMatch, // Spread if found but let id/role be priority if null
-          email: normalizedEmail,
           name: normalizedEmail.split('@')[0]
-        };
+        } as StaffUser;
       }
       
       if (userData) {
         handleLocalFallback(KEYS.USERS, 'insert', userData);
         return userData;
       }
-
-      if (normalizedEmail === 'admin@dhool.com' || normalizedEmail === 'samiiryare23@gmail.com') {
-         const adminProfile: StaffUser = {
-            id: uid,
-            email: normalizedEmail,
-            name: normalizedEmail === 'samiiryare23@gmail.com' ? 'Primary Admin' : 'System Admin',
-            role: 'Admin',
-            status: 'Active',
-            avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=Admin`
-         };
-         try {
-           await setDoc(doc(db, "users", uid), adminProfile);
-         } catch (e) {
-           console.warn("Failed to save admin profile to Firestore, using local only:", e);
-         }
-         return adminProfile;
-      }
       return null;
-
     } catch (error: any) {
-      console.error("Login Error:", error);
-      
-      // Auto-create admin if not found or fallback for special admin accounts
-      if ((normalizedEmail === 'admin@dhool.com' || normalizedEmail === 'samiiryare23@gmail.com') && 
-          (password === 'admin123' || password === 'Mohamed@55')) {
-          try {
-              const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-              const uid = userCredential.user.uid;
-              const adminProfile: StaffUser = {
-                  id: uid,
-                  email: normalizedEmail,
-                  name: normalizedEmail === 'samiiryare23@gmail.com' ? 'Primary Admin' : 'System Admin',
-                  role: 'Admin',
-                  status: 'Active',
-                  avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=Admin`
-              };
-              await setDoc(doc(db, "users", uid), adminProfile);
-              handleLocalFallback(KEYS.USERS, 'insert', adminProfile);
-              return adminProfile;
-          } catch (createError) {
-              console.error("Failed to auto-create admin, checking offline fallback:", createError);
-              return handleOfflineLogin(normalizedEmail, password);
-          }
-      }
-
-      if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') {
-          const localUser = handleOfflineLogin(normalizedEmail, password);
-          if (localUser) return localUser;
-      }
-      
+      console.error("Firebase Login failed with error:", error);
       throw error;
     }
   },
@@ -280,7 +192,7 @@ export const firebaseService = {
             const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
             callback(data);
         }, (error) => {
-            console.error(`Real-time error for ${collectionName}:`, error);
+            console.error(`Real-time error for ${collectionName}:`, error, 'Auth Current User ID:', auth.currentUser?.uid);
         });
 
         return unsubscribe;
@@ -302,14 +214,15 @@ export const firebaseService = {
   getUsers: () => handleRequest(() => getDocs(query(collection(db, "users"), orderBy("name"))).then(s => s.docs.map(d => ({ ...d.data(), id: d.id })) as StaffUser[]), KEYS.USERS, 'get'),
   
   createUserAccount: async (user: StaffUser) => {
-    if (isDbOffline) {
-        return handleLocalFallback(KEYS.USERS, 'insert', user);
-    }
-
-    // Protect Admin Role
+    // Determine user role
     const normalizedEmail = user.email.toLowerCase().trim();
+    
+    // Check if it's the first user
+    const usersSnapshot = await getDocs(query(collection(db, "users"), limit(1)));
     const isAdminEmail = normalizedEmail === 'admin@dhool.com' || normalizedEmail === 'samiiryare23@gmail.com';
-    const finalUser = isAdminEmail ? { ...user, role: 'Admin' as const } : user;
+    
+    // Assign Admin if first user OR special email, otherwise Staff
+    const finalUser = (usersSnapshot.empty || isAdminEmail) ? { ...user, role: 'Admin' as const } : { ...user, role: 'Staff' as const };
 
     try {
         // Cache secondary app instance to avoid repeated heavy initialization
@@ -355,13 +268,19 @@ export const firebaseService = {
 
   insertUser: (user: StaffUser) => handleRequest(() => setDoc(doc(db, "users", user.id), user).then(() => user), KEYS.USERS, 'insert', user),
   updateUser: (id: string, updates: Partial<StaffUser>) => handleRequest(() => {
-    // If it's a special admin account, don't let the role be changed to Staff by mistake
     const finalUpdates = { ...updates };
+    // Fetch user from secureStorage for email check
     const cachedUsers: StaffUser[] = secureStorage.getItem(KEYS.USERS) || [];
-    const user = cachedUsers.find(u => u.id === id);
-    if (user && (user.email === 'admin@dhool.com' || user.email === 'samiiryare23@gmail.com')) {
-       if (finalUpdates.role) finalUpdates.role = 'Admin';
+    const targetedUser = cachedUsers.find(u => u.id === id);
+    
+    // Safety check: Prevent changing role of primary admins
+    if (targetedUser && (targetedUser.email === 'admin@dhool.com' || targetedUser.email === 'samiiryare23@gmail.com')) {
+       if (finalUpdates.role) {
+         console.warn("Prevented role change for primary admin account");
+         delete finalUpdates.role;
+       }
     }
+    
     return updateDoc(doc(db, "users", id), finalUpdates).then(() => finalUpdates);
   }, KEYS.USERS, 'update', { id, updates }),
   deleteUser: (id: string) => handleRequest(() => deleteDoc(doc(db, "users", id)), KEYS.USERS, 'delete', id),
@@ -404,6 +323,7 @@ export const firebaseService = {
 
   getExpenses: () => handleRequest(() => getDocs(query(collection(db, "expenses"), orderBy("date", "desc"))).then(s => s.docs.map(d => ({ ...d.data(), id: d.id })) as Expense[]), KEYS.EXPENSES, 'get'),
   insertExpense: (e: Expense) => handleRequest(() => setDoc(doc(db, "expenses", e.id), e).then(() => e), KEYS.EXPENSES, 'insert', e),
+  deleteExpense: (id: string) => handleRequest(() => deleteDoc(doc(db, "expenses", id)), KEYS.EXPENSES, 'delete', id),
 
   getSalaries: () => handleRequest(() => getDocs(query(collection(db, "salaries"), orderBy("date", "desc"))).then(s => s.docs.map(d => ({ ...d.data(), id: d.id })) as Salary[]), KEYS.SALARIES, 'get'),
   insertSalary: (s: Salary) => handleRequest(() => setDoc(doc(db, "salaries", s.id), s).then(() => s), KEYS.SALARIES, 'insert', s),
