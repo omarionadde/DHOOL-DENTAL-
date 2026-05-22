@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { Patient } from '../types';
 import { DhoolLogo } from './DhoolLogo';
+import html2pdf from 'html2pdf.js';
 
 interface Props {
   patient: Patient;
@@ -8,6 +9,21 @@ interface Props {
 }
 
 export const PatientCardPrint: React.FC<Props> = ({ patient, onClose }) => {
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  const handleDownloadPdf = () => {
+    if (cardRef.current) {
+        const opt = {
+            margin:       10,
+            filename:     `patient-${patient.name}-${patient.id.slice(-6)}.pdf`,
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { scale: 2 },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+        html2pdf().set(opt).from(cardRef.current).save();
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[200] flex items-center justify-center p-4 print:p-0 print:bg-white print:static">
       <style type="text/css" media="print">
@@ -18,13 +34,13 @@ export const PatientCardPrint: React.FC<Props> = ({ patient, onClose }) => {
           .print-hidden { display: none !important; }
         `}
       </style>
-      <div className="bg-white w-full max-w-lg h-auto rounded-3xl shadow-2xl overflow-hidden flex flex-col print:shadow-none print:w-full print:max-w-none print:h-auto print-full-page">
+      <div ref={cardRef} className="bg-white w-full max-w-lg h-auto rounded-3xl shadow-2xl overflow-hidden flex flex-col print:shadow-none print:w-full print:max-w-none print:h-auto print-full-page">
         
         {/* Controls */}
         <div className="p-4 bg-slate-50 border-b flex justify-between items-center print:hidden">
             <div className="text-sm font-black text-slate-800 uppercase tracking-tight">PATIENT CARD</div>
             <div className="flex gap-2">
-                <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 bg-white rounded-lg text-xs font-bold uppercase hover:bg-slate-50">
+                <button onClick={handleDownloadPdf} className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 bg-white rounded-lg text-xs font-bold uppercase hover:bg-slate-50">
                     Download PDF
                 </button>
                 <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-black uppercase hover:bg-blue-700">
