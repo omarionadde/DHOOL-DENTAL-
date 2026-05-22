@@ -22,8 +22,19 @@ export const PatientCardPrint: React.FC<Props> = ({ patient, onClose }) => {
         
         {/* Controls */}
         <div className="p-4 bg-slate-50 border-b flex justify-between items-center print:hidden">
-          <button onClick={onClose} className="text-slate-500 font-bold text-xs uppercase">Close</button>
-          <button onClick={() => window.print()} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-black uppercase">Print / Save PDF</button>
+            <div className="text-sm font-black text-slate-800 uppercase tracking-tight">PATIENT CARD</div>
+            <div className="flex gap-2">
+                <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 bg-white rounded-lg text-xs font-bold uppercase hover:bg-slate-50">
+                    Download PDF
+                </button>
+                <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-black uppercase hover:bg-blue-700">
+                    Print Report
+                </button>
+                <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600">
+                    <span className="sr-only">Close</span>
+                    ✕
+                </button>
+            </div>
         </div>
 
         {/* Card Header (for Print) */}
