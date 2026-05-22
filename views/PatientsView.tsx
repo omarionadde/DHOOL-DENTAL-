@@ -7,6 +7,7 @@ import { getAIAssistance } from '../services/geminiService';
 import { PrescriptionPrint } from '../components/PrescriptionPrint';
 import { PatientReportPrint } from '../components/PatientReportPrint';
 import { LabResultPrint } from '../components/LabResultPrint';
+import { PatientCardPrint } from '../components/PatientCardPrint';
 
 interface Props {
   user: StaffUser;
@@ -27,6 +28,7 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [printingRx, setPrintingRx] = useState<Prescription | null>(null);
   const [showReportPrint, setShowReportPrint] = useState(false);
+  const [showPatientCardPrint, setShowPatientCardPrint] = useState(false);
   const [printingLabs, setPrintingLabs] = useState<LabResult[] | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   
@@ -302,6 +304,14 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
         />
       )}
 
+      {/* Patient Card Modal */}
+      {showPatientCardPrint && selectedPatient && (
+        <PatientCardPrint 
+          patient={selectedPatient}
+          onClose={() => setShowPatientCardPrint(false)}
+        />
+      )}
+
       {/* Image Preview Modal */}
       {selectedImage && (
           <div className="fixed inset-0 bg-black/90 z-[150] flex items-center justify-center p-4 cursor-zoom-out" onClick={() => setSelectedImage(null)}>
@@ -409,6 +419,12 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
                       className="flex items-center gap-2 px-5 py-3 bg-white/10 hover:bg-white/20 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border border-white/10"
                     >
                       <FileDown className="w-4 h-4" /> Full Report
+                    </button>
+                    <button 
+                      onClick={() => setShowPatientCardPrint(true)}
+                      className="flex items-center gap-2 px-5 py-3 bg-white/10 hover:bg-white/20 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border border-white/10"
+                    >
+                      <User className="w-4 h-4" /> Print Card
                     </button>
                     <button 
                       onClick={handleGetAiSummary} 

@@ -50,12 +50,13 @@ export const DebtReceiptPrint: React.FC<DebtReceiptPrintProps> = ({
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[200] flex items-center justify-center p-4 print:p-0 print:bg-white print:static">
       <style type="text/css" media="print">
         {`
-          @page { size: A4; margin: 10mm; }
-          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          .print-full-page { width: 100%; height: 100%; }
+          @page { size: A4 portrait; margin: 10mm; }
+          body, html { width: 100%; height: auto; }
+          .print-full-page { width: 100% !important; height: auto !important; min-height: 0 !important; max-height: none !important; overflow: visible !important; }
+          .print-hidden { display: none !important; }
         `}
       </style>
-      <div className="bg-white w-full max-w-xl h-[90vh] md:h-auto md:max-h-[95vh] rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col print:shadow-none print:w-full print:max-w-none print:h-auto print-full-page">
+      <div className="bg-white w-full max-w-xl h-auto rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col print:shadow-none print:w-full print:max-w-none print:h-auto print-full-page">
         
         {/* Controls */}
         <div className="p-4 bg-slate-50 border-b flex justify-between items-center print:hidden">

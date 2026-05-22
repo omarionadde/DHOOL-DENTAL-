@@ -57,6 +57,34 @@ const AppContent: React.FC = () => {
     }
   }, []);
 
+  useEffect(() => {
+    if (!currentUser) return;
+
+    let logoutTimer: NodeJS.Timeout;
+
+    const resetTimer = () => {
+      clearTimeout(logoutTimer);
+      // 10 minutes timeout = 600,000 milliseconds
+      logoutTimer = setTimeout(() => {
+        handleLogout();
+        alert("Session expired due to inactivity.");
+      }, 600000);
+    };
+
+    // Listen for activity
+    const activityEvents = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
+    
+    activityEvents.forEach(event => window.addEventListener(event, resetTimer));
+    
+    // Set initial timer
+    resetTimer();
+
+    return () => {
+      clearTimeout(logoutTimer);
+      activityEvents.forEach(event => window.removeEventListener(event, resetTimer));
+    };
+  }, [currentUser]);
+
   const handleLogin = async (email: string, pass: string) => {
     try {
         const user = await firebaseService.login(email, pass);
