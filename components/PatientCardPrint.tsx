@@ -13,6 +13,12 @@ export const PatientCardPrint: React.FC<Props> = ({ patient, onClose }) => {
 
   const handleDownloadPdf = () => {
     if (cardRef.current) {
+        // Find the controls element
+        const controlsElement = cardRef.current.querySelector('.print-hidden-in-pdf');
+        if (controlsElement) {
+            (controlsElement as HTMLElement).style.display = 'none';
+        }
+
         const opt = {
             margin:       10,
             filename:     `patient-${patient.name}-${patient.id.slice(-6)}.pdf`,
@@ -20,7 +26,12 @@ export const PatientCardPrint: React.FC<Props> = ({ patient, onClose }) => {
             html2canvas:  { scale: 2 },
             jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
         };
-        html2pdf().set(opt).from(cardRef.current).save();
+        html2pdf().set(opt).from(cardRef.current).save().then(() => {
+            // Restore visibility after download
+            if (controlsElement) {
+                (controlsElement as HTMLElement).style.display = '';
+            }
+        });
     }
   };
 
@@ -37,7 +48,7 @@ export const PatientCardPrint: React.FC<Props> = ({ patient, onClose }) => {
       <div ref={cardRef} className="bg-white w-full max-w-lg h-auto rounded-3xl shadow-2xl overflow-hidden flex flex-col print:shadow-none print:w-full print:max-w-none print:h-auto print-full-page">
         
         {/* Controls */}
-        <div className="p-4 bg-slate-50 border-b flex justify-between items-center print:hidden">
+        <div className="p-4 bg-slate-50 border-b flex justify-between items-center print:hidden print-hidden-in-pdf">
             <div className="text-sm font-black text-slate-800 uppercase tracking-tight">PATIENT CARD</div>
             <div className="flex gap-2">
                 <button onClick={handleDownloadPdf} className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 bg-white rounded-lg text-xs font-bold uppercase hover:bg-slate-50">
