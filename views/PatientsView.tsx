@@ -2,12 +2,13 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { Patient, PatientHistory, Prescription, StaffUser, LabResult } from '../types';
-import { Trash2, Printer, Plus, FileText, Pill, X, Save, Clock, ClipboardList, User, Microscope, Sparkles, AlertCircle, ChevronRight, CheckCircle2, FileDown, Wallet, CreditCard, DollarSign, LayoutGrid, Image as ImageIcon, Upload, Eye } from 'lucide-react';
+import { Trash2, Printer, Plus, FileText, Pill, X, Save, Clock, ClipboardList, User, Microscope, Sparkles, AlertCircle, ChevronRight, CheckCircle2, FileDown, Wallet, CreditCard, DollarSign, LayoutGrid, Image as ImageIcon, Upload, Eye, FileSpreadsheet } from 'lucide-react';
 import { getAIAssistance } from '../services/geminiService';
 import { PrescriptionPrint } from '../components/PrescriptionPrint';
 import { PatientReportPrint } from '../components/PatientReportPrint';
 import { LabResultPrint } from '../components/LabResultPrint';
 import { PatientCardPrint } from '../components/PatientCardPrint';
+import { exportPatientsToExcel } from '../utils/excelExporter';
 
 interface Props {
   user: StaffUser;
@@ -326,7 +327,7 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
           <p className="text-slate-500 font-medium">Clinical registry and diagnostic management.</p>
         </div>
         
-        <div className="flex flex-1 w-full md:w-auto gap-3">
+        <div className="flex flex-1 w-full md:w-auto gap-3 items-center">
           <div className="relative flex-1 max-w-md">
             <SearchIcon />
             <input 
@@ -337,6 +338,13 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
+          <button 
+             onClick={() => exportPatientsToExcel(filteredPatients)}
+             className="bg-emerald-600 text-white px-5 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-emerald-600/20 hover:bg-emerald-700 transition-all flex items-center gap-2 whitespace-nowrap"
+             title="Dhoofi Excel (Export Customers to Excel)"
+          >
+            <FileSpreadsheet className="w-4 h-4" /> Export Excel
+          </button>
           <button 
              onClick={() => setShowAddModal(true)}
              className="bg-blue-600 text-white px-6 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-blue-600/20 hover:bg-blue-700 transition-all flex items-center gap-2 whitespace-nowrap"

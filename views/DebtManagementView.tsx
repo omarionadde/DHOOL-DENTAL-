@@ -1,7 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
-import { Search, Info, CreditCard, ChevronDown } from 'lucide-react';
+import { Search, Info, CreditCard, ChevronDown, FileSpreadsheet, FileText } from 'lucide-react';
 import { DebtReceiptPrint } from '../components/DebtReceiptPrint';
+import { DebtReportPrint } from '../components/DebtReportPrint';
+import { exportDebtsToExcel } from '../utils/excelExporter';
 import { Patient } from '../types';
 
 export default function DebtManagementView() {
@@ -13,9 +15,10 @@ export default function DebtManagementView() {
   const [paymentMethod, setPaymentMethod] = useState('Cash');
   const [isProcessing, setIsProcessing] = useState(false);
   
-  // Receipt state
+  // Receipt state & Debt PDF Report state
   const [showReceipt, setShowReceipt] = useState(false);
   const [receiptData, setReceiptData] = useState<any>(null);
+  const [showPdfReport, setShowPdfReport] = useState(false);
 
   const indebtedPatients = useMemo(() => {
     return patients
@@ -70,10 +73,28 @@ export default function DebtManagementView() {
            <p className="text-slate-500 font-medium mt-1">Track and collect outstanding patient balances</p>
         </div>
         
-        <div className="bg-white px-6 py-4 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-6">
-          <div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Outstanding</p>
-            <p className="text-3xl font-black text-rose-500">${totalDebt.toFixed(2)}</p>
+        <div className="flex flex-wrap items-center gap-3">
+          <button 
+            onClick={() => exportDebtsToExcel(indebtedPatients)}
+            className="flex items-center gap-2 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-lg shadow-emerald-600/20"
+            title="Dhoofi Excel (Export to Excel)"
+          >
+            <FileSpreadsheet className="w-4 h-4" /> Export Excel
+          </button>
+          
+          <button 
+            onClick={() => setShowPdfReport(true)}
+            className="flex items-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-lg shadow-blue-600/20"
+            title="Warbixin PDF (Export PDF Report)"
+          >
+            <FileText className="w-4 h-4" /> Export PDF
+          </button>
+
+          <div className="bg-white px-6 py-3.5 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-6">
+            <div>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Total Outstanding</p>
+              <p className="text-2xl font-black text-rose-500">${totalDebt.toFixed(2)}</p>
+            </div>
           </div>
         </div>
       </div>
@@ -211,6 +232,14 @@ export default function DebtManagementView() {
         <DebtReceiptPrint 
           {...receiptData}
           onClose={() => setShowReceipt(false)}
+        />
+      )}
+
+      {showPdfReport && (
+        <DebtReportPrint
+          patients={indebtedPatients}
+          totalDebt={totalDebt}
+          onClose={() => setShowPdfReport(false)}
         />
       )}
     </div>
