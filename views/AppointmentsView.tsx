@@ -1,14 +1,17 @@
 
 import React, { useState } from 'react';
 import { 
-  Calendar, Clock, User, Stethoscope, CheckCircle2, XCircle, Clock3, PlusCircle, X, UserPlus, Users, Search
+  Calendar, Clock, User, Stethoscope, CheckCircle2, XCircle, Clock3, PlusCircle, X, UserPlus, Users, Search, MessageSquare
 } from 'lucide-react';
 import { Appointment } from '../types';
 import { useData } from '../context/DataContext';
+import { WhatsAppModal } from '../components/WhatsAppModal';
+import { getAppointmentReminderMessage } from '../utils/whatsappHelper';
 
 const AppointmentsView: React.FC = () => {
   const { appointments, patients, addNewAppointment } = useData();
   const [showModal, setShowModal] = useState(false);
+  const [whatsAppData, setWhatsAppData] = useState<{ phone: string; patientName: string; message: string; title: string } | null>(null);
   
   // Toggle between existing patient list or new guest
   const [isGuest, setIsGuest] = useState(false);
@@ -120,7 +123,29 @@ const AppointmentsView: React.FC = () => {
                         </div>
                     </div>
                 </div>
-                <div className="flex gap-2 self-end md:self-center">
+                <div className="flex items-center gap-2 self-end md:self-center">
+                    <button
+                      onClick={() => {
+                        const pat = patients.find(p => p.id === apt.patientId);
+                        const msg = getAppointmentReminderMessage({
+                          patientName: apt.patientName,
+                          date: apt.date,
+                          time: apt.time,
+                          doctor: apt.doctor,
+                          reason: apt.reason
+                        });
+                        setWhatsAppData({
+                          phone: pat?.phone || '',
+                          patientName: apt.patientName,
+                          message: msg,
+                          title: "Xusuusinta Ballanta (WhatsApp Reminder)"
+                        });
+                      }}
+                      className="px-3.5 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer"
+                      title="U dir WhatsApp Xusuusin"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5 text-emerald-600" /> WhatsApp
+                    </button>
                     <div className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${
                         apt.status === 'Completed' ? 'bg-emerald-100 text-emerald-700' :
                         apt.status === 'In Progress' ? 'bg-blue-100 text-blue-700' :
@@ -233,6 +258,16 @@ const AppointmentsView: React.FC = () => {
             </form>
           </div>
         </div>
+      )}
+
+      {whatsAppData && (
+        <WhatsAppModal
+          initialPhone={whatsAppData.phone}
+          patientName={whatsAppData.patientName}
+          initialMessage={whatsAppData.message}
+          title={whatsAppData.title}
+          onClose={() => setWhatsAppData(null)}
+        />
       )}
     </div>
   );

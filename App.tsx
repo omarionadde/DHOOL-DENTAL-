@@ -22,6 +22,7 @@ import ReportsView from './views/ReportsView';
 import TreasuryView from './views/TreasuryView';
 import SuppliersView from './views/SuppliersView';
 import ClinicalServicesView from './views/ClinicalServicesView';
+import LaboratoryView from './views/LaboratoryView';
 import SettingsView from './views/SettingsView';
 import LoginView from './views/LoginView';
 import AIAssistantView from './views/AIAssistantView';
@@ -144,7 +145,8 @@ const AppContent: React.FC = () => {
         debts: 'Maamulka Deymaha',
         admin: 'User-ada',
         logout: 'Ka Bax',
-        queue: 'Qolka Sugitaanka'
+        queue: 'Qolka Sugitaanka',
+        laboratory: 'Shaybaarka (Lab)'
       },
       en: {
         dashboard: 'Dashboard',
@@ -167,7 +169,8 @@ const AppContent: React.FC = () => {
         debts: 'Debt Management',
         admin: 'Users',
         logout: 'Logout',
-        queue: 'Waiting Queue'
+        queue: 'Waiting Queue',
+        laboratory: 'Laboratory'
       }
     };
     return dict[language]?.[key] || key;
@@ -178,7 +181,7 @@ const AppContent: React.FC = () => {
     if (currentUser.role === 'Admin') return true;
     switch(view) {
       case 'dashboard': return true;
-      case 'patients': case 'appointments': case 'services': case 'queue': return (['Doctor', 'Staff', 'Admin'] as string[]).includes(currentUser.role);
+      case 'patients': case 'appointments': case 'services': case 'queue': case 'laboratory': return (['Doctor', 'Staff', 'Admin'] as string[]).includes(currentUser.role);
       case 'pos': case 'pharmacy': case 'suppliers': return (['Staff', 'Admin'] as string[]).includes(currentUser.role);
       case 'invoices': case 'expenses': case 'salaries': case 'reports': case 'treasury': return (['Accountant', 'Admin'] as string[]).includes(currentUser.role);
       case 'users': return false;
@@ -212,10 +215,11 @@ const AppContent: React.FC = () => {
             </NavGroup>
           )}
 
-          {canAccess('services') && (
+           {canAccess('services') && (
             <NavGroup id="services_grp" label="Clinical Core" isOpen={expandedGroup === 'services_grp'} onToggle={() => handleGroupToggle('services_grp')} isSidebarOpen={isSidebarOpen} icon={Stethoscope}>
                <SubNavItem to="/services" label={t('services')} active={location.pathname === '/services'} />
                <SubNavItem to="/clinical-management" label={t('manage_services')} active={location.pathname === '/clinical-management'} />
+               <SubNavItem to="/laboratory" label={t('laboratory')} active={location.pathname === '/laboratory'} />
             </NavGroup>
           )}
 
@@ -297,6 +301,7 @@ const AppContent: React.FC = () => {
                  <Route path="/pos" element={<POSView mode="pos" currency={currency} t={t} />} />
                  <Route path="/services" element={<POSView mode="services" currency={currency} t={t} />} />
                  <Route path="/clinical-management" element={<ClinicalServicesView />} />
+                 <Route path="/laboratory" element={<LaboratoryView />} />
                  <Route path="/patients" element={<PatientsView user={currentUser} t={t} />} />
                  <Route path="/appointments" element={<AppointmentsView />} />
                  <Route path="/pharmacy" element={<PharmacyView />} />

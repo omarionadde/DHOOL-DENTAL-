@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, Globe, Shield, Save, Camera, Lock, Calendar, DollarSign, Key, CheckCircle, Database, Link as LinkIcon, Download, AlertTriangle } from 'lucide-react';
+import { User, Globe, Shield, Save, Camera, Lock, Calendar, DollarSign, Key, CheckCircle, Database, Link as LinkIcon, Download, AlertTriangle, Upload, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { StaffUser } from '../types';
 import { daftraApi } from '../services/daftraService';
 import { secureStorage } from '../utils/secureStorage';
@@ -80,6 +80,58 @@ const SettingsView: React.FC<Props> = ({
     URL.revokeObjectURL(url);
   };
 
+  // Restore States
+  const [restoreFile, setRestoreFile] = useState<any>(null);
+  const [restoreStats, setRestoreStats] = useState<any>(null);
+  const [isRestoring, setIsRestoring] = useState(false);
+  const [restoreSuccessMsg, setRestoreSuccessMsg] = useState<string | null>(null);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const json = JSON.parse(event.target?.result as string);
+        const source = json.data || json;
+        if (!source || typeof source !== 'object') {
+          alert("Faylka la doortay ma ahan mid sax ah (Invalid backup file)");
+          return;
+        }
+
+        setRestoreFile(json);
+        setRestoreStats({
+          patients: Array.isArray(source.patients) ? source.patients.length : 0,
+          inventory: Array.isArray(source.inventory) ? source.inventory.length : 0,
+          invoices: Array.isArray(source.invoices) ? source.invoices.length : 0,
+          appointments: Array.isArray(source.appointments) ? source.appointments.length : 0,
+          expenses: Array.isArray(source.expenses) ? source.expenses.length : 0,
+          timestamp: json.timestamp || new Date().toISOString()
+        });
+      } catch (err) {
+        alert("Qalad: Faylkan looma akhrin karo JSON ahaan.");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = ''; // Reset input
+  };
+
+  const handleConfirmRestore = async () => {
+    if (!restoreFile) return;
+    setIsRestoring(true);
+    const res = await data.restoreFullBackup(restoreFile);
+    setIsRestoring(false);
+    if (res.success) {
+      setRestoreSuccessMsg(res.message);
+      setRestoreFile(null);
+      setRestoreStats(null);
+      setTimeout(() => setRestoreSuccessMsg(null), 5000);
+    } else {
+      alert(res.message);
+    }
+  };
+
   return (
     <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
       <div className="flex justify-between items-center">
@@ -145,29 +197,133 @@ const SettingsView: React.FC<Props> = ({
             )}
           </div>
 
-          {/* SYSTEM DATA BACKUP */}
-          <div className="bg-slate-900 rounded-[3rem] p-10 text-white border border-white/5 shadow-2xl space-y-8 relative overflow-hidden group">
+          {/* SYSTEM DATA BACKUP & RESTORE CENTER */}
+          <div className="bg-slate-900 rounded-[3rem] p-10 text-white border border-white/5 shadow-2xl space-y-6 relative overflow-hidden group">
             <div className="absolute top-0 right-0 p-10 opacity-10 group-hover:scale-110 transition-transform">
                <Download className="w-40 h-40" />
             </div>
             <div className="relative z-10">
-                <h3 className="text-xl font-black tracking-tight mb-2">Master System Backup</h3>
-                <p className="text-slate-400 text-sm font-medium mb-8 max-w-lg">
-                  Soo deji dhammaan xogta nidaamka oo isku duuban (JSON). Waxaad u isticmaali kartaa inaad ku keydiso computer kale ama aad dib ugu soo celiso system-ka haddii wax xumaadaan.
+                <div className="flex flex-wrap items-center justify-between gap-4 mb-2">
+                  <h3 className="text-xl font-black tracking-tight">Master System Backup & Restore</h3>
+                  <span className="px-3 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-full text-[9px] font-black uppercase tracking-widest">
+                    Safe Snapshot Engine
+                  </span>
+                </div>
+                <p className="text-slate-400 text-sm font-medium mb-6 max-w-xl">
+                  Ku keydi dhammaan xogta xarunta (Bukaannada, Daawooyinka, Biilasha, Ballamaha) hal fayl oo JSON ah. Waxaad sidoo kale faylkaas dib ugu soo celin kartaa system-ka haddii aad beddelayso qalabka ama aad xog soo celinayso.
                 </p>
-                <div className="flex flex-col sm:flex-row gap-4">
+
+                {/* Live Data Counts */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6 bg-white/5 p-4 rounded-2xl border border-white/10">
+                  <div className="text-center">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Bukaanno</p>
+                    <p className="text-xl font-black text-white">{data.patients.length}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Daawooyin</p>
+                    <p className="text-xl font-black text-white">{data.inventory.length}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Biilal / Invoices</p>
+                    <p className="text-xl font-black text-white">{data.invoices.length}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Ballamo</p>
+                    <p className="text-xl font-black text-white">{data.appointments.length}</p>
+                  </div>
+                </div>
+
+                {restoreSuccessMsg && (
+                  <div className="mb-6 p-4 bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 rounded-2xl flex items-center gap-3 text-xs font-bold animate-in fade-in">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                    <span>{restoreSuccessMsg}</span>
+                  </div>
+                )}
+
+                <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center">
                    <button 
                      onClick={downloadMasterBackup}
-                     className="px-8 py-4 bg-white text-slate-900 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-50 transition-all flex items-center justify-center gap-2 shadow-xl"
+                     className="px-6 py-4 bg-white text-slate-900 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-50 transition-all flex items-center justify-center gap-2 shadow-xl cursor-pointer"
                    >
-                     <Download className="w-4 h-4" /> Generate Backup File
+                     <Download className="w-4 h-4 text-blue-600" /> Soo Deji Backup (Download)
                    </button>
-                   <div className="flex items-center gap-3 px-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                     <AlertTriangle className="w-4 h-4 text-amber-500" /> Recommendation: Backup Weekly
+
+                   <label className="px-6 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-xl cursor-pointer">
+                     <Upload className="w-4 h-4" /> Soo Celi Xogta (Restore)
+                     <input 
+                       type="file" 
+                       accept=".json" 
+                       onChange={handleFileUpload} 
+                       className="hidden" 
+                     />
+                   </label>
+
+                   <div className="flex items-center gap-2 px-4 py-4 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                     <AlertTriangle className="w-4 h-4 text-amber-500" /> Weekly Recommended
                    </div>
                 </div>
             </div>
           </div>
+
+          {/* RESTORE CONFIRMATION MODAL */}
+          {restoreStats && (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[250] flex items-center justify-center p-4">
+              <div className="bg-white text-slate-900 w-full max-w-md rounded-3xl p-6 shadow-2xl border-2 border-slate-200 animate-in fade-in zoom-in-95">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 bg-amber-100 text-amber-700 rounded-2xl flex items-center justify-center">
+                    <RefreshCw className="w-6 h-6 animate-spin" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-slate-900">Xaqiijinta Soo Celinta Xogta</h3>
+                    <p className="text-xs text-slate-500">Restore System Data Confirmation</p>
+                  </div>
+                </div>
+
+                <p className="text-xs text-slate-600 leading-relaxed mb-4">
+                  Faylka aad dooratay wuxuu ka kooban yahay xogtan hoose. Ma hubtaa inaad rabto inaad dib ugu soo celiso nidaamka?
+                </p>
+
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2 mb-6 text-xs">
+                  <div className="flex justify-between">
+                    <span className="font-bold text-slate-500">Tirada Bukaannada:</span>
+                    <span className="font-black text-slate-900">{restoreStats.patients}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-bold text-slate-500">Tirada Daawooyinka:</span>
+                    <span className="font-black text-slate-900">{restoreStats.inventory}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-bold text-slate-500">Tirada Biilasha:</span>
+                    <span className="font-black text-slate-900">{restoreStats.invoices}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-bold text-slate-500">Tirada Ballamaha:</span>
+                    <span className="font-black text-slate-900">{restoreStats.appointments}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-bold text-slate-500">Taariikhda Backup-ka:</span>
+                    <span className="font-black text-blue-600">{new Date(restoreStats.timestamp).toLocaleDateString()}</span>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => { setRestoreFile(null); setRestoreStats(null); }}
+                    className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-black text-xs uppercase"
+                  >
+                    Ka Noqo (Cancel)
+                  </button>
+                  <button
+                    onClick={handleConfirmRestore}
+                    disabled={isRestoring}
+                    className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs uppercase shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2"
+                  >
+                    {isRestoring ? 'Soo Celinaya...' : 'Haa, Soo Celi (Restore)'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* SIDEBAR PREFERENCES */}

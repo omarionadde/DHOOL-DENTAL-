@@ -17,24 +17,52 @@
         scrollbar-width: none;
       }
       
-      /* Print Styles */
+      /* Universal Print Styles */
       @media print {
-        body * {
-          visibility: hidden;
+        @page {
+          margin: 8mm;
+          size: auto;
         }
-        #invoice-content, #invoice-content * {
-          visibility: visible;
-        }
-        #invoice-content {
-          position: absolute;
-          left: 0;
-          top: 0;
-          width: 100%;
-          margin: 0;
-          padding: 10px;
-        }
-        .no-print {
+
+        /* Hide app background, sidebars, headers, buttons and controls */
+        nav, aside, header, .print\:hidden, .no-print, button, .print-hidden {
           display: none !important;
+        }
+
+        body, html {
+          background: #ffffff !important;
+          color: #000000 !important;
+          width: 100% !important;
+          height: auto !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+
+        /* Force all text to 100% solid black for sharp printing */
+        * {
+          color: #000000 !important;
+          -webkit-text-fill-color: #000000 !important;
+          text-shadow: none !important;
+        }
+
+        /* Modal backdrop reset for printing */
+        .fixed.inset-0 {
+          position: static !important;
+          background: transparent !important;
+          padding: 0 !important;
+          margin: 0 !important;
+          box-shadow: none !important;
+          display: block !important;
+        }
+
+        /* Printable cards expand cleanly without clipping */
+        [class*="max-w-"] {
+          max-width: 100% !important;
+          width: 100% !important;
+          box-shadow: none !important;
+          border-radius: 0 !important;
         }
       }
     </style>

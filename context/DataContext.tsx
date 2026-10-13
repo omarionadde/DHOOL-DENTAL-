@@ -40,6 +40,8 @@ interface DataContextType {
   
   // Labs
   addNewLabResult: (l: LabResult) => Promise<void>;
+  updateLabResult: (id: string, updates: Partial<LabResult>) => Promise<void>;
+  deleteLabResult: (id: string) => Promise<void>;
   
   // Inventory
   addNewMedicine: (m: Medicine) => Promise<void>;
@@ -73,6 +75,9 @@ interface DataContextType {
   removeUser: (id: string) => Promise<void>;
   updateUserProfile: (id: string, data: Partial<StaffUser>) => Promise<StaffUser | null>;
   
+  // Backup & Restore
+  restoreFullBackup: (backupJson: any) => Promise<{ success: boolean; message: string; count: number }>;
+
   isLoading: boolean;
   isOnline: boolean;
 }
@@ -333,6 +338,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     logAction('CREATE', 'LAB_RESULT', `Added ${l.testName} for patient ID: ${l.patientId}`);
   };
 
+  const updateLabResult = async (id: string, updates: Partial<LabResult>) => {
+    setLabResults(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
+    firebaseService.updateLabResult(id, updates);
+    logAction('UPDATE', 'LAB_RESULT', `Updated lab test ID: ${id}`);
+  };
+
+  const deleteLabResult = async (id: string) => {
+    const l = labResults.find(i => i.id === id);
+    setLabResults(prev => prev.filter(item => item.id !== id));
+    firebaseService.deleteLabResult(id);
+    logAction('DELETE', 'LAB_RESULT', `Removed lab test: ${l?.testName || id}`);
+  };
+
   const addNewMedicine = async (m: Medicine) => {
     setInventory(prev => [m, ...prev.filter(i => i.id !== m.id)]);
     firebaseService.insertMedicine(m);
@@ -469,12 +487,89 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return res;
   };
 
+  const restoreFullBackup = async (backupJson: any): Promise<{ success: boolean; message: string; count: number }> => {
+    try {
+      const source = backupJson.data || backupJson;
+      if (!source || typeof source !== 'object') {
+        return { success: false, message: 'Faylka la geliyay ma ahan mid sax ah (Invalid backup format)', count: 0 };
+      }
+
+      let restoredCount = 0;
+
+      if (Array.isArray(source.patients)) {
+        setPatients(source.patients);
+        secureStorage.setItem(LOCAL_KEYS.PATIENTS, source.patients);
+        restoredCount += source.patients.length;
+      }
+      if (Array.isArray(source.inventory)) {
+        setInventory(source.inventory);
+        secureStorage.setItem(LOCAL_KEYS.INVENTORY, source.inventory);
+        restoredCount += source.inventory.length;
+      }
+      if (Array.isArray(source.invoices)) {
+        setInvoices(source.invoices);
+        secureStorage.setItem(LOCAL_KEYS.INVOICES, source.invoices);
+        restoredCount += source.invoices.length;
+      }
+      if (Array.isArray(source.expenses)) {
+        setExpenses(source.expenses);
+        secureStorage.setItem(LOCAL_KEYS.EXPENSES, source.expenses);
+        restoredCount += source.expenses.length;
+      }
+      if (Array.isArray(source.appointments)) {
+        setAppointments(source.appointments);
+        secureStorage.setItem(LOCAL_KEYS.APPOINTMENTS, source.appointments);
+        restoredCount += source.appointments.length;
+      }
+      if (Array.isArray(source.salaries)) {
+        setSalaries(source.salaries);
+        secureStorage.setItem(LOCAL_KEYS.SALARIES, source.salaries);
+        restoredCount += source.salaries.length;
+      }
+      if (Array.isArray(source.clinicalServices)) {
+        setClinicalServices(source.clinicalServices);
+        secureStorage.setItem(LOCAL_KEYS.SERVICES, source.clinicalServices);
+        restoredCount += source.clinicalServices.length;
+      }
+      if (Array.isArray(source.patientHistory)) {
+        setPatientHistory(source.patientHistory);
+        secureStorage.setItem(LOCAL_KEYS.HISTORY, source.patientHistory);
+        restoredCount += source.patientHistory.length;
+      }
+      if (Array.isArray(source.prescriptions)) {
+        setPrescriptions(source.prescriptions);
+        secureStorage.setItem(LOCAL_KEYS.PRESCRIPTIONS, source.prescriptions);
+        restoredCount += source.prescriptions.length;
+      }
+      if (Array.isArray(source.labResults)) {
+        setLabResults(source.labResults);
+        secureStorage.setItem(LOCAL_KEYS.LABS, source.labResults);
+        restoredCount += source.labResults.length;
+      }
+      if (Array.isArray(source.suppliers)) {
+        setSuppliers(source.suppliers);
+        secureStorage.setItem(LOCAL_KEYS.SUPPLIERS, source.suppliers);
+        restoredCount += source.suppliers.length;
+      }
+      if (Array.isArray(source.activityLogs)) {
+        setActivityLogs(source.activityLogs);
+        secureStorage.setItem(LOCAL_KEYS.LOGS, source.activityLogs);
+      }
+
+      logAction('RESTORE', 'SYSTEM', `Dib loo soo celiyay xogta nidaamka (${restoredCount} diiwaan)`);
+      return { success: true, message: `Xogta si guul leh ayaa dib loogu soo celiyay (${restoredCount} diiwaan).`, count: restoredCount };
+    } catch (err: any) {
+      console.error('Failed to restore backup:', err);
+      return { success: false, message: `Qalad ayaa dhacay: ${err.message || 'Unknown error'}`, count: 0 };
+    }
+  };
+
   return (
     <DataContext.Provider value={{
       patients, inventory, clinicalServices, appointments, invoices, expenses, salaries, users, patientHistory, prescriptions, suppliers, labResults, activityLogs,
-      refreshData, addNewPatient, updatePat, deletePat, processPatientPayment, addNewHistory, addNewPrescription, removePrescription, addNewLabResult, addNewMedicine, updateMed, deleteMed, 
+      refreshData, addNewPatient, updatePat, deletePat, processPatientPayment, addNewHistory, addNewPrescription, removePrescription, addNewLabResult, updateLabResult, deleteLabResult, addNewMedicine, updateMed, deleteMed, 
       addNewService, removeService, addNewSupplier, updateSupplier, addTransaction, updateInvoiceStatus, removeInvoice, addNewAppointment, updateAppointmentStatus, addExpense, removeExpense, addSalary,
-      addNewUser, removeUser, updateUserProfile, isLoading, isOnline
+      addNewUser, removeUser, updateUserProfile, restoreFullBackup, isLoading, isOnline
     }}>
       {children}
     </DataContext.Provider>

@@ -1,0 +1,8 @@
+/* Base styles */
+@media print {
+  * {
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
+    text-shadow: none !important;
+  }
+}

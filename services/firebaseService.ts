@@ -334,6 +334,8 @@ export const firebaseService = {
 
   getLabResults: () => handleRequest(() => getDocs(query(collection(db, "lab_results"), orderBy("date", "desc"))).then(s => s.docs.map(d => ({ ...d.data(), id: d.id })) as LabResult[]), KEYS.LABS, 'get'),
   insertLabResult: (l: LabResult) => handleRequest(() => setDoc(doc(db, "lab_results", l.id), l).then(() => l), KEYS.LABS, 'insert', l),
+  updateLabResult: (id: string, updates: Partial<LabResult>) => handleRequest(() => updateDoc(doc(db, "lab_results", id), updates).then(() => updates), KEYS.LABS, 'update', { id, updates }),
+  deleteLabResult: (id: string) => handleRequest(() => deleteDoc(doc(db, "lab_results", id)), KEYS.LABS, 'delete', id),
 
   getPrescriptions: () => handleRequest(() => getDocs(query(collection(db, "prescriptions"), orderBy("date", "desc"))).then(s => s.docs.map(d => ({ ...d.data(), id: d.id })) as Prescription[]), KEYS.PRESCRIPTIONS, 'get'),
   insertPrescription: (rx: Prescription) => handleRequest(() => setDoc(doc(db, "prescriptions", rx.id), rx).then(() => rx), KEYS.PRESCRIPTIONS, 'insert', rx),

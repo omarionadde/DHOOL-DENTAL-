@@ -33,11 +33,19 @@ export interface PatientHistory {
 export interface LabResult {
   id: string;
   patientId: string;
+  patientName?: string;
   testName: string;
+  category?: string;
   result: string;
+  unit?: string;
+  referenceRange?: string;
+  notes?: string;
   date: string;
   doctorName: string;
+  technicianName?: string;
   status: 'Normal' | 'Abnormal' | 'Critical';
+  orderStatus?: 'Pending' | 'In Progress' | 'Completed';
+  price?: number;
 }
 
 export interface Prescription {
@@ -168,4 +176,5 @@ export type ViewType =
   | 'treasury'
   | 'suppliers'
   | 'settings'
-  | 'debts';
+  | 'debts'
+  | 'laboratory';

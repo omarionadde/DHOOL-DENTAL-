@@ -1,8 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
-import { Search, Info, CreditCard, ChevronDown, FileSpreadsheet, FileText } from 'lucide-react';
+import { Search, Info, CreditCard, ChevronDown, FileSpreadsheet, FileText, MessageSquare } from 'lucide-react';
 import { DebtReceiptPrint } from '../components/DebtReceiptPrint';
 import { DebtReportPrint } from '../components/DebtReportPrint';
+import { WhatsAppModal } from '../components/WhatsAppModal';
+import { getDebtReminderMessage } from '../utils/whatsappHelper';
 import { exportDebtsToExcel } from '../utils/excelExporter';
 import { Patient } from '../types';
 
@@ -15,10 +17,11 @@ export default function DebtManagementView() {
   const [paymentMethod, setPaymentMethod] = useState('Cash');
   const [isProcessing, setIsProcessing] = useState(false);
   
-  // Receipt state & Debt PDF Report state
+  // Receipt state & Debt PDF Report state & WhatsApp state
   const [showReceipt, setShowReceipt] = useState(false);
   const [receiptData, setReceiptData] = useState<any>(null);
   const [showPdfReport, setShowPdfReport] = useState(false);
+  const [whatsAppData, setWhatsAppData] = useState<{ phone: string; patientName: string; message: string; title: string } | null>(null);
 
   const indebtedPatients = useMemo(() => {
     return patients
@@ -136,15 +139,36 @@ export default function DebtManagementView() {
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Balance</p>
                         <p className="font-black text-rose-500 text-lg">${(patient.balance || 0).toFixed(2)}</p>
                       </div>
-                      <button 
-                        onClick={() => {
-                          setSelectedPatient(patient);
-                          setPaymentAmount((patient.balance || 0).toString());
-                        }}
-                        className="px-4 py-2 bg-blue-50 text-blue-600 rounded-xl font-bold text-sm hover:bg-blue-100 transition-colors"
-                      >
-                        Settle
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            const msg = getDebtReminderMessage({
+                              patientName: patient.name,
+                              balance: patient.balance || 0,
+                              patientId: patient.id
+                            });
+                            setWhatsAppData({
+                              phone: patient.phone,
+                              patientName: patient.name,
+                              message: msg,
+                              title: "Xusuusinta Deenta (WhatsApp Debt Reminder)"
+                            });
+                          }}
+                          className="px-3 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                          title="U dir WhatsApp Xusuusin Deyn"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5 text-emerald-600" /> WhatsApp
+                        </button>
+                        <button 
+                          onClick={() => {
+                            setSelectedPatient(patient);
+                            setPaymentAmount((patient.balance || 0).toString());
+                          }}
+                          className="px-4 py-2 bg-blue-50 text-blue-600 rounded-xl font-bold text-sm hover:bg-blue-100 transition-colors"
+                        >
+                          Settle
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -240,6 +264,16 @@ export default function DebtManagementView() {
           patients={indebtedPatients}
           totalDebt={totalDebt}
           onClose={() => setShowPdfReport(false)}
+        />
+      )}
+
+      {whatsAppData && (
+        <WhatsAppModal
+          initialPhone={whatsAppData.phone}
+          patientName={whatsAppData.patientName}
+          initialMessage={whatsAppData.message}
+          title={whatsAppData.title}
+          onClose={() => setWhatsAppData(null)}
         />
       )}
     </div>

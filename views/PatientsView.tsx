@@ -2,12 +2,13 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { Patient, PatientHistory, Prescription, StaffUser, LabResult } from '../types';
-import { Trash2, Printer, Plus, FileText, Pill, X, Save, Clock, ClipboardList, User, Microscope, Sparkles, AlertCircle, ChevronRight, CheckCircle2, FileDown, Wallet, CreditCard, DollarSign, LayoutGrid, Image as ImageIcon, Upload, Eye, FileSpreadsheet } from 'lucide-react';
+import { Trash2, Printer, Plus, FileText, Pill, X, Save, Clock, ClipboardList, User, Microscope, Sparkles, AlertCircle, ChevronRight, CheckCircle2, FileDown, Wallet, CreditCard, DollarSign, LayoutGrid, Image as ImageIcon, Upload, Eye, FileSpreadsheet, MessageSquare } from 'lucide-react';
 import { getAIAssistance } from '../services/geminiService';
 import { PrescriptionPrint } from '../components/PrescriptionPrint';
 import { PatientReportPrint } from '../components/PatientReportPrint';
 import { LabResultPrint } from '../components/LabResultPrint';
 import { PatientCardPrint } from '../components/PatientCardPrint';
+import { WhatsAppModal } from '../components/WhatsAppModal';
 import { exportPatientsToExcel } from '../utils/excelExporter';
 
 interface Props {
@@ -32,6 +33,7 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
   const [showPatientCardPrint, setShowPatientCardPrint] = useState(false);
   const [printingLabs, setPrintingLabs] = useState<LabResult[] | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [whatsAppData, setWhatsAppData] = useState<{ phone: string; patientName: string; message: string; title: string } | null>(null);
   
   // Registration State
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -440,6 +442,20 @@ const PatientsView: React.FC<Props> = ({ user, t }) => {
                       className="flex items-center gap-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-700 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all"
                     >
                       {isAiLoading ? 'Analyzing...' : <><Sparkles className="w-4 h-4" /> AI Diagnostics</>}
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setWhatsAppData({
+                          phone: selectedPatient.phone,
+                          patientName: selectedPatient.name,
+                          message: `Asc ${selectedPatient.name},\nDhool Dental Clinic & Pharmacy waxaan kugu soo dhaweynaynaa xarunteena.\n📍 Waaberi, Via Liberia, Muqdisho\n📞 Tel: +252 61 972 6662`,
+                          title: `Fariin WhatsApp - ${selectedPatient.name}`
+                        });
+                      }}
+                      className="flex items-center gap-2 px-5 py-3 bg-[#25D366] hover:bg-[#20ba59] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-[#25D366]/30 cursor-pointer"
+                      title="U dir WhatsApp"
+                    >
+                      <MessageSquare className="w-4 h-4" /> WhatsApp
                     </button>
                     <button onClick={() => setSelectedPatient(null)} className="p-3 bg-white/10 hover:bg-white/20 rounded-2xl transition-all border border-white/10">
                       <X className="w-6 h-6" />
