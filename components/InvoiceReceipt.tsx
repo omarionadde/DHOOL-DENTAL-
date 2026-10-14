@@ -40,11 +40,12 @@ export const InvoiceReceipt: React.FC<InvoiceProps> = ({
     const element = document.getElementById('invoice-content');
     if (!element) return;
     const opt = {
-      margin: 0,
+      margin: 5,
       filename: `Dhool_Receipt_${transactionId.slice(-6)}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true },
-      jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+      html2canvas: { scale: 2, useCORS: true, scrollY: 0 },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak: { mode: ['avoid-all'] }
     };
 
     if (typeof html2pdf !== 'undefined') {
@@ -86,7 +87,11 @@ export const InvoiceReceipt: React.FC<InvoiceProps> = ({
         </div>
 
         {/* Receipt Content Area */}
-        <div id="invoice-content" className="p-6 text-black font-mono text-[11px] bg-white leading-tight">
+        <div 
+          id="invoice-content" 
+          className="print-sheet-active print-sheet-receipt p-6 text-black font-mono text-[11px] bg-white leading-tight"
+          style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}
+        >
           
           <div className="flex flex-col items-center justify-center mb-4 border-b-2 border-dashed border-black pb-4">
             <DhoolLogo className="w-16 h-16 mb-2" />

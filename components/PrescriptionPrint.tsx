@@ -24,11 +24,12 @@ export const PrescriptionPrint: React.FC<PrescriptionPrintProps> = ({
     const element = document.getElementById('prescription-print-content');
     if (!element) return;
     const opt = {
-      margin: 10,
+      margin: 8,
       filename: `Dhool_Rx_${patient.name.replace(/\s+/g, '_')}_${prescription.date}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      html2canvas: { scale: 2, useCORS: true, scrollY: 0 },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak: { mode: ['avoid-all'] }
     };
 
     if (typeof html2pdf !== 'undefined') {
@@ -70,7 +71,11 @@ export const PrescriptionPrint: React.FC<PrescriptionPrintProps> = ({
         </div>
 
         {/* Prescription Document Content */}
-        <div id="prescription-print-content" className="flex-1 overflow-y-auto p-8 sm:p-12 bg-white text-black print:overflow-visible">
+        <div 
+          id="prescription-print-content" 
+          className="print-sheet-active flex-1 overflow-y-auto p-6 sm:p-10 bg-white text-black print:overflow-hidden print:p-0"
+          style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}
+        >
           
           {/* Header */}
           <div className="flex justify-between items-start border-b-4 border-black pb-6 mb-6">

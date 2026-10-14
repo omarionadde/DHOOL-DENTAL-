@@ -32,11 +32,12 @@ export const DebtReceiptPrint: React.FC<DebtReceiptPrintProps> = ({
     const element = document.getElementById('debt-receipt-content');
     if (!element) return;
     const opt = {
-      margin: 10,
+      margin: 8,
       filename: `Dhool_DebtReceipt_${patient.name.replace(/\s+/g, '_')}_${date}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true },
-      jsPDF: { unit: 'mm', format: 'a5', orientation: 'portrait' }
+      html2canvas: { scale: 2, useCORS: true, scrollY: 0 },
+      jsPDF: { unit: 'mm', format: 'a5', orientation: 'portrait' },
+      pagebreak: { mode: ['avoid-all'] }
     };
 
     if (typeof html2pdf !== 'undefined') {
@@ -78,7 +79,11 @@ export const DebtReceiptPrint: React.FC<DebtReceiptPrintProps> = ({
         </div>
 
         {/* Receipt Document Content */}
-        <div id="debt-receipt-content" className="flex-1 overflow-y-auto p-8 sm:p-10 bg-white text-black print:overflow-visible">
+        <div 
+          id="debt-receipt-content" 
+          className="print-sheet-active flex-1 overflow-y-auto p-8 sm:p-10 bg-white text-black print:overflow-hidden print:p-0"
+          style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}
+        >
           
           {/* Header */}
           <div className="text-center pb-6 border-b-2 border-black border-dashed mb-6">

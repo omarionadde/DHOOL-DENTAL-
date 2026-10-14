@@ -23,8 +23,9 @@ export const PatientCardPrint: React.FC<Props> = ({ patient, onClose }) => {
             margin:       10,
             filename:     `Dhool_Patient_Card_${patient.name.replace(/\s+/g, '_')}_${patient.id.slice(-6)}.pdf`,
             image:        { type: 'jpeg', quality: 0.98 },
-            html2canvas:  { scale: 2 },
-            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            html2canvas:  { scale: 2, scrollY: 0 },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            pagebreak:    { mode: ['avoid-all'] }
         };
         html2pdf().set(opt).from(cardRef.current).save().then(() => {
             if (controlsElement) {
@@ -36,7 +37,11 @@ export const PatientCardPrint: React.FC<Props> = ({ patient, onClose }) => {
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[200] flex items-center justify-center p-3 sm:p-6 print:p-0 print:bg-white print:static overflow-y-auto">
-      <div ref={cardRef} className="bg-white w-full max-w-lg h-auto rounded-2xl shadow-2xl overflow-hidden flex flex-col border-2 border-slate-300 print:border-none print:shadow-none print:w-full print:max-w-none my-auto">
+      <div 
+        ref={cardRef} 
+        className="print-sheet-active bg-white w-full max-w-lg h-auto rounded-2xl shadow-2xl overflow-hidden flex flex-col border-2 border-slate-300 print:border-none print:shadow-none print:w-full print:max-w-none my-auto"
+        style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}
+      >
         
         {/* Controls */}
         <div className="p-4 bg-slate-900 border-b border-slate-800 flex justify-between items-center print:hidden print-hidden-in-pdf text-white">

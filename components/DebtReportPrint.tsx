@@ -23,11 +23,12 @@ export const DebtReportPrint: React.FC<DebtReportPrintProps> = ({
     const element = document.getElementById('debt-report-pdf-content');
     if (!element) return;
     const opt = {
-      margin: 10,
+      margin: 8,
       filename: `Warbixinta_Deemaha_Dhool_${new Date().toISOString().split('T')[0]}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      html2canvas: { scale: 2, useCORS: true, scrollY: 0 },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak: { mode: ['avoid-all'] }
     };
 
     html2pdf().set(opt).from(element).save();
@@ -67,7 +68,11 @@ export const DebtReportPrint: React.FC<DebtReportPrintProps> = ({
         </div>
 
         {/* Printable / PDF Content */}
-        <div id="debt-report-pdf-content" className="flex-1 overflow-y-auto p-8 sm:p-10 bg-white text-black print:overflow-visible">
+        <div 
+          id="debt-report-pdf-content" 
+          className="print-sheet-active flex-1 overflow-y-auto p-8 sm:p-10 bg-white text-black print:overflow-hidden print:p-0"
+          style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}
+        >
           
           {/* Clinic Header */}
           <div className="flex justify-between items-start border-b-4 border-black pb-6 mb-6">
